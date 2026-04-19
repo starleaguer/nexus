@@ -13,6 +13,7 @@ MANIFEST_PATH = SHARED_DIR / "manifest.json"
 class NexusConfig:
     """Nexus 시스템 전체 설정 관리자"""
     
+    PROJECT_ROOT = PROJECT_ROOT
     MANIFEST_PATH = MANIFEST_PATH
     _manifest = None
 

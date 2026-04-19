@@ -13,6 +13,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
 import ollama
+
+# 프로젝트 루트를 sys.path에 추가하여 shared 모듈 등을 찾을 수 있게 함
+PROJECT_ROOT = str(Path(__file__).parent.parent)
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
 from shared.config_loader import NexusConfig
 
 # ==================== 설정 ====================
