@@ -14,7 +14,9 @@
         "entry": "worker/skills/market_flow.py",
         "capabilities": [
           "market_analysis",
-          "trend_detection"
+          "trend_detection",
+          "sector_analysis",
+          "volume_analysis"
         ]
       }
     ],

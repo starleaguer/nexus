@@ -8,5 +8,6 @@ dependencies = [
     "fastapi",
     "uvicorn",
     "pydantic",
-    "ollama"
+    "ollama",
+    "yfinance>=1.3.0",
 ]

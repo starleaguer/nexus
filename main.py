@@ -211,7 +211,7 @@ async def test_workflow():
         logger.warning(f"Worker 헬스 체크 실패: {e}")
     
     # 6. 테스트 질문 실행
-    test_question = "현재 시장에서 가장 많은 자본이 흐르는 섹터를 찾아줘"
+    test_question = "현재 거래대금 상위 섹터가 뭐야?"
     print(f"\n[6] 테스트 질문 실행...")
     print(f"    질문: {test_question}")
     print("-" * 60)
