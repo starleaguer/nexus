@@ -1,0 +1,23 @@
+{
+  "version": "1.0.0",
+  "name": "nexus",
+  "description": "분산 AI 작업 관리 시스템",
+  "tools": {
+    "skills": [
+      {
+        "name": "market_flow",
+        "description": "시장 흐름 분석 스킬",
+        "entry": "worker/skills/market_flow.py",
+        "capabilities": ["market_analysis", "trend_detection"]
+      }
+    ],
+    "mcp": []
+  },
+  "worker": {
+    "host": "0.0.0.0",
+    "port": 8000
+  },
+  "manager": {
+    "vector_store_path": "manager/vector_store"
+  }
+}
