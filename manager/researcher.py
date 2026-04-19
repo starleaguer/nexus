@@ -78,13 +78,13 @@ class ToolHunter:
 
 [평가 기준]
 1. 로컬 구동 가능성 (Local Runnable)
-2. 주식/시장 데이터 관련성 (Stock/Market Data Relevance)
-3. 파이썬 라이브러리 지원 여부 (Python Library Support)
+2. 에이전트 능력 확장성 (Agent Capability Expansion): 투자 분석뿐만 아니라 일반 검색, 자동화, 생산성, 브라우징, 에이전트 관리 등 다양한 분야의 유용성 평가
+3. 파이썬 라이브러리 지원 또는 MCP 표준 준수 (Python/MCP Support)
 
 [핵심 원칙]
-Principle 1: Low-Latency & Local-First (외부 유료 API(OpenAI, Anthropic 등) 필수 요구 시 감점)
-Principle 2: Structural Data over News (단순 가십성 뉴스 크롤러보다는 재무/수급 등 구조적 데이터 선호)
-Principle 3: Composability (다른 에이전트와 결합하기 쉬운 Class/Function 기반 모듈형 구조 선호)
+Principle 1: Low-Latency & Local-First (외부 유료 API 필수 요구 시 감점. 단, 검색 도구의 경우 제한적 허용)
+Principle 2: Actionable Data & Skills (단순 가십보다는 실제 분석이나 작업(Action)을 수행할 수 있는 도구 선호)
+Principle 3: Composability (다른 에이전트와 결합하기 쉬운 모듈형 구조 선호)
 
 반드시 아래 JSON 형식으로만 응답해:
 {
@@ -158,11 +158,17 @@ URL: {repo_info.get('html_url')}
         self._save_candidates(candidates)
         logger.info(f"새로운 후보 도구 저장됨: {candidate_entry['tool_name']}")
 
-    async def run_research_cycle(self):
+    async def run_research_cycle(self, custom_queries: List[str] = None):
         """탐색 사이클 실행"""
         logger.info("탐색 사이클 시작...")
         
-        queries = ["mcp-server stock", "mcp-server finance", "stock analysis toolkit"]
+        queries = custom_queries or [
+            "mcp-server stock finance", 
+            "mcp-server search browsing", 
+            "mcp-server automation productivity",
+            "mcp-server agent-management",
+            "stock analysis toolkit"
+        ]
         for query in queries:
             logger.info(f"검색어: {query}")
             repos = await self.search_github_repositories(query=query, limit=3)

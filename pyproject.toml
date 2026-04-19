@@ -17,6 +17,9 @@ dependencies = [
     "borsa-mcp",
     "mcp-server",
     "maverick-mcp",
+    "kospi-kosdaq-stock-server",
+    "aiofiles>=25.1.0",
+    "jinja2>=3.1.6",
 ]
 
 [tool.uv.workspace]
@@ -25,6 +28,7 @@ members = [
     "temp_tools/borsa-mcp",
     "temp_tools/financial-datasets-mcp",
     "temp_tools/maverick-mcp",
+    "temp_tools/kospi-kosdaq-stock-server",
 ]
 
 [tool.uv.sources]
@@ -32,4 +36,6 @@ tradingview-mcp-server = { workspace = true }
 borsa-mcp = { workspace = true }
 mcp-server = { workspace = true }
 maverick-mcp = { workspace = true }
+kospi-kosdaq-stock-server = { workspace = true }
+
 

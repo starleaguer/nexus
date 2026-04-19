@@ -1,0 +1,26 @@
+# Smithery configuration file: https://smithery.ai/docs/config#smitheryyaml
+
+startCommand:
+  type: stdio
+  configSchema:
+    type: object
+    required:
+      - kakaoId
+      - kakaoPw
+    properties:
+      kakaoId:
+        type: string
+        description: "Kakao account ID for KRX Data Marketplace authentication"
+      kakaoPw:
+        type: string
+        description: "Kakao account password"
+  commandFunction:
+    |-
+    (config) => ({
+      command: 'uvx',
+      args: ['kospi_kosdaq_stock_server'],
+      env: {
+        KAKAO_ID: config.kakaoId,
+        KAKAO_PW: config.kakaoPw
+      }
+    })

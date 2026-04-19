@@ -58,7 +58,8 @@ class NexusConfig:
     @classmethod
     def get_worker_url(cls) -> str:
         """Worker 서버의 URL을 가져옵니다."""
-        # 1. 환경 변수 우선
+        # 1. 환경 변수 우선 (NEXUS_MODE=local 혹은 WORKER_URL 직접 지정)
+        nexus_mode = os.getenv("NEXUS_MODE")
         url = os.getenv("WORKER_URL")
         if url:
             return url
@@ -66,7 +67,14 @@ class NexusConfig:
         manifest = cls.load_manifest()
         worker_cfg = manifest.get("worker", {})
         
-        ip = os.getenv("RTX_IP", worker_cfg.get("ip", "127.0.0.1"))
+        # 2. 로컬 모드 확인 (환경 변수 혹은 매니페스트)
+        mode = nexus_mode or worker_cfg.get("mode", "remote")
+        
+        if mode == "local":
+            ip = "127.0.0.1"
+        else:
+            ip = os.getenv("RTX_IP", worker_cfg.get("ip", "127.0.0.1"))
+            
         port = os.getenv("RTX_PORT", worker_cfg.get("port", 8000))
         
         return f"http://{ip}:{port}"

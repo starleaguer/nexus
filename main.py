@@ -212,7 +212,7 @@ async def test_workflow():
         logger.warning(f"Worker 헬스 체크 실패: {e}")
     
     # 6. 테스트 질문 실행
-    user_input = "현재 거래대금 상위 섹터가 뭐야?"
+    user_input = "현재 아마존 투자는 어때보여?"
     print(f"\n[6] 테스트 질문 실행...")
     print(f"    질문: {user_input}")
     print("-" * 60)

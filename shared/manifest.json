@@ -3,7 +3,7 @@
   "name": "nexus",
   "description": "분산 AI 작업 관리 시스템",
   "models": {
-    "worker": "gemma4",
+    "worker": "gemma4:e4b",
     "manager": "gemma4:26b"
   },
   "tools": {
@@ -22,9 +22,9 @@
     ],
     "mcp": [
       {
-        "name": "tradingview-mcp",
+        "name": "tradingview_mcp",
         "description": "실시간 암호화폐 및 주식 스크리닝, 30개 이상의 기술적 지표, 백테스팅 및 멀티 거래소(Binance, KuCoin 등) 데이터를 제공하는 MCP 서버 기반 트레이딩 인텔리전스 프레임워크",
-        "entry": "worker/skills/tradingview-mcp.py",
+        "entry": "worker/skills/tradingview_mcp.py",
         "capabilities": [
           "Real-time Crypto & Stock Screening",
           "Advanced Technical Indicators (Bollinger Bands, Candlestick Patterns, etc.)",
@@ -35,9 +35,9 @@
         "repo_url": "https://github.com/atilaahmettaner/tradingview-mcp"
       },
       {
-        "name": "borsa-mcp",
+        "name": "borsa_mcp",
         "description": "Borsa İstanbul(BIST) 및 미국 주식, TEFAS 펀드, 암호화폐, 거시 경제 데이터를 제공하는 MCP 서버",
-        "entry": "worker/skills/borsa-mcp.py",
+        "entry": "worker/skills/borsa_mcp.py",
         "capabilities": [
           "BIST 및 US 주식 시장 데이터 조회",
           "기술적 지표 스캐닝 (RSI, MACD, Supertrend 등)",
@@ -48,9 +48,9 @@
         "repo_url": "https://github.com/saidsurucu/borsa-mcp"
       },
       {
-        "name": "financial-datasets-mcp",
+        "name": "financial_datasets_mcp",
         "description": "Financial Datasets API를 통해 주식 및 암호화폐의 재무제표(손익계산서, 대차대조표 등), 가격 변동, 뉴스 등 시장의 구조적 데이터를 제공하는 MCP 서버",
-        "entry": "worker/skills/financial-datasets-mcp.py",
+        "entry": "worker/skills/financial_datasets_mcp.py",
         "capabilities": [
           "재무제표(손익계산서, 대차대조표, 현금흐름표) 조회",
           "주식 및 암호화폐의 실시간/과거 가격 데이터 획득",
@@ -59,9 +59,9 @@
         "repo_url": "https://github.com/financial-datasets/mcp-server"
       },
       {
-        "name": "maverick-mcp",
+        "name": "maverick_mcp",
         "description": "개인 투자자를 위한 전문 수준의 주식 분석 및 기술적 지표 계산, 백테스팅, 포트폴리오 최적화를 지원하는 MCP 서버",
-        "entry": "worker/skills/maverick-mcp.py",
+        "entry": "worker/skills/maverick_mcp.py",
         "capabilities": [
           "Technical Analysis (SMA, EMA, RSI, MACD, Bollinger Bands)",
           "Backtesting engine using VectorBT",
@@ -70,10 +70,41 @@
           "Historical and real-time stock data access"
         ],
         "repo_url": "https://github.com/wshobson/maverick-mcp"
+      },
+      {
+        "name": "kospi_kosdaq_stock_server",
+        "description": "국내 주식(KOSPI/KOSDAQ)의 시세, 재무, 거래량 및 투자자별 매매 동향 데이터를 제공하는 MCP 서버",
+        "entry": "worker/skills/kospi_kosdaq_stock_server.py",
+        "capabilities": [
+          "KOSPI/KOSDAQ 시세 조회",
+          "재무 지표(PER/PBR) 조회",
+          "투자자별 거래량 분석"
+        ]
+      },
+      {
+        "name": "mcp_chrome",
+        "description": "브라우저 자동화 및 웹 페이지 콘텐츠 분석, 시맨틱 검색 기능을 제공하는 브라우저 제어 MCP 서버",
+        "entry": "worker/skills/mcp_chrome.py",
+        "capabilities": [
+          "Browser Automation",
+          "Content Extraction",
+          "Web Search"
+        ]
+      },
+      {
+        "name": "reddit_mcp_buddy",
+        "description": "Reddit 게시글 검색 및 여론 트렌드 분석 기능을 제공하는 소셜 리서치 MCP 서버",
+        "entry": "worker/skills/reddit_mcp_buddy.py",
+        "capabilities": [
+          "Reddit Search",
+          "Trend Analysis",
+          "Sentiment Monitoring"
+        ]
       }
     ]
   },
   "worker": {
+    "mode": "local",
     "host": "0.0.0.0",
     "port": 8000,
     "ip": "192.168.219.115"
