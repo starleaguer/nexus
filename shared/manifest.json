@@ -33,6 +33,19 @@
           "Live Market Sentiment analysis"
         ],
         "repo_url": "https://github.com/atilaahmettaner/tradingview-mcp"
+      },
+      {
+        "name": "borsa-mcp",
+        "description": "Borsa İstanbul(BIST) 및 미국 주식, TEFAS 펀드, 암호화폐, 거시 경제 데이터를 제공하는 MCP 서버",
+        "entry": "worker/skills/borsa-mcp.py",
+        "capabilities": [
+          "BIST 및 US 주식 시장 데이터 조회",
+          "기술적 지표 스캐닝 (RSI, MACD, Supertrend 등)",
+          "펀드(TEFAS) 성능 및 포트폴리오 비교",
+          "암호화폐, 외환 및 원자재 가격 데이터",
+          "거시 경제 데이터(인플레이션 등) 및 경제 캘린더"
+        ],
+        "repo_url": "https://github.com/saidsurucu/borsa-mcp"
       }
     ]
   },

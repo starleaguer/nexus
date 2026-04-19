@@ -13,12 +13,16 @@ dependencies = [
     "apscheduler>=3.11.2",
     "aiohttp>=3.13.5",
     "tradingview-mcp-server",
+    "langgraph>=1.1.8",
+    "borsa-mcp",
 ]
 
 [tool.uv.workspace]
 members = [
     "temp_tools/tradingview-mcp",
+    "temp_tools/borsa-mcp",
 ]
 
 [tool.uv.sources]
 tradingview-mcp-server = { workspace = true }
+borsa-mcp = { workspace = true }
