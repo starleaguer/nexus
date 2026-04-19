@@ -6,6 +6,7 @@ import sys
 import os
 from pathlib import Path
 import json
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,20 +16,9 @@ import ollama
 
 # 매니페스트에서 모델 로드
 PROJECT_ROOT = Path(__file__).parent.parent
-with open(PROJECT_ROOT / "shared" / "manifest.json") as f:
+with open(PROJECT_ROOT / "shared" / "manifest.json", encoding='utf-8') as f:
     _MANIFEST = json.load(f)
 WORKER_MODEL = _MANIFEST.get("models", {}).get("worker", "gemma2:9b")
-
-app = FastAPI(title="Nexus Worker API")
-
-# CORS 설정 - 외부(Mac)からの接続を許可
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # すべてのOriginsを許可（本番では制限推奨）
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 # 매니저 연결 정보
 MANAGER_URL = os.getenv("MANAGER_URL", "http://localhost:9000")
@@ -43,7 +33,7 @@ SKILLS_REGISTRY = {}
 def load_manifest():
     """매니페스트에서 스킬 로드"""
     manifest_path = os.path.join(os.path.dirname(__file__), "../shared/manifest.json")
-    with open(manifest_path, "r") as f:
+    with open(manifest_path, "r", encoding='utf-8') as f:
         return json.load(f)
 
 
@@ -51,6 +41,11 @@ def discover_skills():
     """skills 디렉토리에서 사용 가능한 스킬 발견"""
     if not SKILLS_DIR.exists():
         return
+    
+    # 프로젝트 루트를 sys.path에 추가하여 모듈 로드 경로 설정
+    project_root = str(Path(__file__).parent.parent)
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
     
     for py_file in SKILLS_DIR.glob("*.py"):
         if py_file.stem == "__init__":
@@ -76,6 +71,29 @@ def discover_skills():
                 }
         except Exception as e:
             print(f"Failed to load skill {py_file.stem}: {e}")
+
+
+# Lifespan 이벤트 핸들러
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    manifest = load_manifest()
+    discover_skills()
+    print(f"Loaded skills: {list(SKILLS_REGISTRY.keys())}")
+    yield
+    # Shutdown (optional)
+
+
+app = FastAPI(title="Nexus Worker API", lifespan=lifespan)
+
+# CORS 설정 - 외부(Mac)からの接続を許可
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # すべてのOriginsを許可（本番では制限推奨）
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 def execute_skill(skill_name: str, params: Dict[str, Any]) -> Dict[str, Any]:
@@ -124,14 +142,6 @@ def summarize_with_ollama(raw_result: Dict[str, Any]) -> str:
     except Exception as e:
         print(f"Ollama 요약 실패: {e}")
         return f"요약 실패 (원본 결과): {json.dumps(raw_result, ensure_ascii=False)}"
-
-
-@app.on_event("startup")
-async def startup():
-    """시작 시 스킬 로드"""
-    manifest = load_manifest()
-    discover_skills()
-    print(f"Loaded skills: {list(SKILLS_REGISTRY.keys())}")
 
 
 class TaskRequest(BaseModel):
