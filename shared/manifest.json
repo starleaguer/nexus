@@ -46,6 +46,30 @@
           "거시 경제 데이터(인플레이션 등) 및 경제 캘린더"
         ],
         "repo_url": "https://github.com/saidsurucu/borsa-mcp"
+      },
+      {
+        "name": "financial-datasets-mcp",
+        "description": "Financial Datasets API를 통해 주식 및 암호화폐의 재무제표(손익계산서, 대차대조표 등), 가격 변동, 뉴스 등 시장의 구조적 데이터를 제공하는 MCP 서버",
+        "entry": "worker/skills/financial-datasets-mcp.py",
+        "capabilities": [
+          "재무제표(손익계산서, 대차대조표, 현금흐름표) 조회",
+          "주식 및 암호화폐의 실시간/과거 가격 데이터 획득",
+          "기업 관련 뉴스 및 암호화폐 티커 리스트 제공"
+        ],
+        "repo_url": "https://github.com/financial-datasets/mcp-server"
+      },
+      {
+        "name": "maverick-mcp",
+        "description": "개인 투자자를 위한 전문 수준의 주식 분석 및 기술적 지표 계산, 백테스팅, 포트폴리오 최적화를 지원하는 MCP 서버",
+        "entry": "worker/skills/maverick-mcp.py",
+        "capabilities": [
+          "Technical Analysis (SMA, EMA, RSI, MACD, Bollinger Bands)",
+          "Backtesting engine using VectorBT",
+          "Stock Screening (S&P 500 based strategies)",
+          "Portfolio Optimization",
+          "Historical and real-time stock data access"
+        ],
+        "repo_url": "https://github.com/wshobson/maverick-mcp"
       }
     ]
   },

@@ -15,14 +15,21 @@ dependencies = [
     "tradingview-mcp-server",
     "langgraph>=1.1.8",
     "borsa-mcp",
+    "mcp-server",
+    "maverick-mcp",
 ]
 
 [tool.uv.workspace]
 members = [
     "temp_tools/tradingview-mcp",
     "temp_tools/borsa-mcp",
+    "temp_tools/financial-datasets-mcp",
+    "temp_tools/maverick-mcp",
 ]
 
 [tool.uv.sources]
 tradingview-mcp-server = { workspace = true }
 borsa-mcp = { workspace = true }
+mcp-server = { workspace = true }
+maverick-mcp = { workspace = true }
+
