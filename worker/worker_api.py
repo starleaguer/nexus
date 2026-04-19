@@ -5,14 +5,19 @@ import importlib
 import sys
 import os
 from pathlib import Path
+import json
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
-import json
-import asyncio
 import ollama
+
+# 매니페스트에서 모델 로드
+PROJECT_ROOT = Path(__file__).parent.parent
+with open(PROJECT_ROOT / "shared" / "manifest.json") as f:
+    _MANIFEST = json.load(f)
+WORKER_MODEL = _MANIFEST.get("models", {}).get("worker", "gemma2:9b")
 
 app = FastAPI(title="Nexus Worker API")
 
@@ -96,9 +101,8 @@ def execute_skill(skill_name: str, params: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def summarize_with_ollama(raw_result: Dict[str, Any]) -> str:
-    """Ollama (gemma2:9b)로 결과 요약"""
+    """Ollama로 결과 요약"""
     try:
-        # 결과를 텍스트로 변환
         result_text = json.dumps(raw_result, ensure_ascii=False, indent=2)
         
         prompt = f"""다음 작업 실행 결과를 핵심만 요약해줘:
@@ -112,7 +116,7 @@ def summarize_with_ollama(raw_result: Dict[str, Any]) -> str:
 """
         
         response = ollama.chat(
-            model="gemma2:9b",
+            model=WORKER_MODEL,  # 매니페스트에서 로드
             messages=[{"role": "user", "content": prompt}]
         )
         

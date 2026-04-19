@@ -4,6 +4,7 @@ Gemma-27B(Ollama)를 사용한 중앙 통제 시스템
 방어적 코딩 적용: 네트워크 병목, 서버 다운 등 예외 상황 처리
 """
 from typing import Dict, Any, List, Optional
+from pathlib import Path
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
 import asyncio
@@ -19,13 +20,24 @@ logger = logging.getLogger(__name__)
 from manager.memory_manager import MemoryManager
 
 
+# ==================== 설정 로드 ====================
+def load_config() -> dict:
+    """매니페스트에서 설정 로드"""
+    with open(Path(__file__).parent.parent / "shared" / "manifest.json") as f:
+        return json.load(f)
+
+_CONFIG = load_config()
+
 # ==================== 설정 ====================
 class Config:
     """설정"""
-    MAX_RETRIES = 3           # 최대 재시도 횟수
-    RETRY_DELAY = 2           # 재시도 간격 (초)
-    WORKER_TIMEOUT = 30       # Worker 요청 타임아웃 (초)
-    OLLAMA_TIMEOUT = 20       # Ollama 요청 타임아웃 (초)
+    MAX_RETRIES = 3
+    RETRY_DELAY = 2
+    WORKER_TIMEOUT = 30
+    OLLAMA_TIMEOUT = 20
+
+# 매니페스트에서 모델 로드 (하드코딩 제거)
+MANAGER_MODEL = _CONFIG.get("models", {}).get("manager", "gemma2:27b")
 
 
 # ==================== AgentState 정의 ====================
@@ -55,32 +67,25 @@ class AgentState(dict):
 
 # ==================== LLM 클라이언트 (방어적) ====================
 class OllamaClient:
-    """Ollama Gemma-27B 클라이언트 (방어적 코딩)"""
+    """Ollama 클라이언트"""
     
-    def __init__(self, model: str = "gemma2:27b"):
-        self.model = model
+    def __init__(self, model: str = None):
+        self.model = model or MANAGER_MODEL  # 매니페스트에서 로드
     
     def chat(self, system: str, user: str, timeout: int = Config.OLLAMA_TIMEOUT) -> str:
-        """채팅 응답 생성 (타임아웃 처리)"""
+        """채팅 응답 생성"""
         import ollama
         
         try:
-            # 타임아웃을 위한 asyncio 사용
-            response = asyncio.wait_for(
-                asyncio.to_thread(
-                    ollama.chat,
-                    model=self.model,
-                    messages=[
-                        {"role": "system", "content": system},
-                        {"role": "user", "content": user}
-                    ]
-                ),
-                timeout=timeout
+            # ollama.chat은 동기 함수이므로 직접 호출
+            response = ollama.chat(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user}
+                ]
             )
             return response["message"]["content"]
-        except asyncio.TimeoutError:
-            logger.error(f"Ollama 타임아웃 ({timeout}초)")
-            return "분석 시간이 초과되었습니다. 다시 시도해 주세요."
         except Exception as e:
             logger.error(f"Ollama 오류: {e}")
             return f"AI 분석 중 오류가 발생했습니다: {str(e)[:100]}"
@@ -165,7 +170,7 @@ class ManagerCore:
     """메니저 코어 - LangGraph 기반 워크플로우"""
     
     def __init__(self):
-        self.llm = OllamaClient(model="gemma2:27b")
+        self.llm = OllamaClient()  # 매니페스트 모델 사용
         self.memory = MemoryManager()
         self.worker_url = os.getenv("WORKER_URL", "http://localhost:8000")
         self.graph = self._build_graph()

@@ -62,7 +62,9 @@ class MemoryManager:
         """ChromaDB 초기화"""
         if CHROMADB_AVAILABLE:
             os.makedirs(self.vector_store_path, exist_ok=True)
-            self.chroma_client = ChromaClient(persist_directory=self.vector_store_path)
+            # 최신 ChromaDB: PersistentClient 사용
+            from chromadb import PersistentClient
+            self.chroma_client = PersistentClient(path=self.vector_store_path)
             
             # 투자 원칙 컬렉션
             self.principles_collection = self.chroma_client.get_or_create_collection("investment_principles")
