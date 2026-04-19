@@ -94,7 +94,10 @@ class OllamaClient:
             for p in principles
         ]) if principles else "적용된 원칙 없음"
         
-        tools = _CONFIG.get("tools", {}).get("skills", [])
+        skills = _CONFIG.get("tools", {}).get("skills", [])
+        mcp_tools = _CONFIG.get("tools", {}).get("mcp", [])
+        tools = skills + mcp_tools
+        
         tools_text = "\n".join([
             f"- {t.get('name')}: {t.get('description')} (capabilities: {', '.join(t.get('capabilities', []))})" 
             for t in tools

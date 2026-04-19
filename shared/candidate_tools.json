@@ -1,0 +1,18 @@
+[
+  {
+    "repo": "atilaahmettaner/tradingview-mcp",
+    "url": "https://github.com/atilaahmettaner/tradingview-mcp",
+    "tool_name": "tradingview-mcp",
+    "description": "실시간 암호화폐 및 주식 스크리닝, 30개 이상의 기술적 지표, 백테스팅 및 멀티 거래소(Binance, KuCoin 등) 데이터를 제공하는 MCP 서버 기반 트레이딩 인텔리전스 프레임워크",
+    "type": "mcp",
+    "capabilities": [
+      "Real-time Crypto & Stock Screening",
+      "Advanced Technical Indicators (Bollinger Bands, Candlestick Patterns, etc.)",
+      "Backtesting with Sharpe Ratio calculation",
+      "Multi-exchange data integration (Binance, KuCoin, Bybit)",
+      "Live Market Sentiment analysis"
+    ],
+    "reasoning": "이 도구는 MCP(Model Context Protocol) 표준을 준 따르는 서버로, 별도의 유료 API 키 없이 Yahoo Finance 등을 통해 시장 데이터를 가져올 수 있어 Local-First 원칙에 부합합니다. 단순 뉴스 크롤링을 넘어 30가지 이상의 기술적 지표와 백테스팅 기능을 제공하여 구조적 데이터 활용도가 매우 높으며, pip를 통한 설치와 MCP 규격을 통해 다른 에이전트와의 결합성(Composability)이 매우 뛰어납니다.",
+    "status": "approved"
+  }
+]

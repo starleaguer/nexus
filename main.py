@@ -178,7 +178,8 @@ async def test_workflow():
     # 2. 시스템 프롬프트 구성
     print("\n[2] 시스템 프롬프트 구성...")
     system_prompt = build_system_prompt(manifest)
-    print(f"    사용 가능한 도구: {len(manifest.get('tools', {}).get('skills', []))}개")
+    total_tools = len(manifest.get('tools', {}).get('skills', [])) + len(manifest.get('tools', {}).get('mcp', []))
+    print(f"    사용 가능한 도구: {total_tools}개")
     
     # 3. Worker URL 확인
     print("\n[3] Worker 연결 설정...")
@@ -211,12 +212,12 @@ async def test_workflow():
         logger.warning(f"Worker 헬스 체크 실패: {e}")
     
     # 6. 테스트 질문 실행
-    test_question = "현재 거래대금 상위 섹터가 뭐야?"
+    user_input = "애플(AAPL) 주가 기술적 분석 및 시장 분위기 종합해서 알려줘"
     print(f"\n[6] 테스트 질문 실행...")
-    print(f"    질문: {test_question}")
+    print(f"    질문: {user_input}")
     print("-" * 60)
     
-    result = await safe_execute_workflow(manager, test_question, "test_user")
+    result = await safe_execute_workflow(manager, user_input, "test_user")
     
     # 결과 출력
     print("\n[결과]")

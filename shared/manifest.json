@@ -20,7 +20,21 @@
         ]
       }
     ],
-    "mcp": []
+    "mcp": [
+      {
+        "name": "tradingview-mcp",
+        "description": "실시간 암호화폐 및 주식 스크리닝, 30개 이상의 기술적 지표, 백테스팅 및 멀티 거래소(Binance, KuCoin 등) 데이터를 제공하는 MCP 서버 기반 트레이딩 인텔리전스 프레임워크",
+        "entry": "worker/skills/tradingview-mcp.py",
+        "capabilities": [
+          "Real-time Crypto & Stock Screening",
+          "Advanced Technical Indicators (Bollinger Bands, Candlestick Patterns, etc.)",
+          "Backtesting with Sharpe Ratio calculation",
+          "Multi-exchange data integration (Binance, KuCoin, Bybit)",
+          "Live Market Sentiment analysis"
+        ],
+        "repo_url": "https://github.com/atilaahmettaner/tradingview-mcp"
+      }
+    ]
   },
   "worker": {
     "host": "0.0.0.0",

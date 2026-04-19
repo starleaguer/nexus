@@ -10,4 +10,15 @@ dependencies = [
     "pydantic",
     "ollama",
     "yfinance>=1.3.0",
+    "apscheduler>=3.11.2",
+    "aiohttp>=3.13.5",
+    "tradingview-mcp-server",
 ]
+
+[tool.uv.workspace]
+members = [
+    "temp_tools/tradingview-mcp",
+]
+
+[tool.uv.sources]
+tradingview-mcp-server = { workspace = true }
