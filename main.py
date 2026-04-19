@@ -212,7 +212,7 @@ async def test_workflow():
         logger.warning(f"Worker 헬스 체크 실패: {e}")
     
     # 6. 테스트 질문 실행
-    user_input = "애플(AAPL) 주가 기술적 분석 및 시장 분위기 종합해서 알려줘"
+    user_input = "현재 거래대금 상위 섹터가 뭐야?"
     print(f"\n[6] 테스트 질문 실행...")
     print(f"    질문: {user_input}")
     print("-" * 60)
@@ -254,6 +254,21 @@ async def test_workflow():
             print("-" * 60)
         else:
             print("\n⚠ 최종 리포트 없음 (Worker 연결 실패 가능)")
+        
+        # ---------------- 피드백 루프 ----------------
+        if final_report and hasattr(manager, "process_feedback"):
+            print("\n" + "=" * 60)
+            feedback = input("[피드백] 이 리포트에서 개선할 점이나 선호하는 방식을 알려주세요 (엔터시 건너뜀): ")
+            if feedback.strip():
+                print("    피드백을 분석하여 에이전트 성향을 업데이트합니다...")
+                # Task ID는 임의 생성 (실제 환경에서는 state의 task_id 사용)
+                task_id = f"test_task_{os.urandom(2).hex()}"
+                success = manager.process_feedback("test_user", task_id, feedback)
+                if success:
+                    print("    ✓ 사용자 성향 최적화 완료!")
+                else:
+                    print("    ❌ 성향 최적화 실패")
+        # ----------------------------------------------
     
     print("\n" + "=" * 60)
     print("테스트 완료")

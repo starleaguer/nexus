@@ -14,5 +14,113 @@
     ],
     "reasoning": "이 도구는 MCP(Model Context Protocol) 표준을 준 따르는 서버로, 별도의 유료 API 키 없이 Yahoo Finance 등을 통해 시장 데이터를 가져올 수 있어 Local-First 원칙에 부합합니다. 단순 뉴스 크롤링을 넘어 30가지 이상의 기술적 지표와 백테스팅 기능을 제공하여 구조적 데이터 활용도가 매우 높으며, pip를 통한 설치와 MCP 규격을 통해 다른 에이전트와의 결합성(Composability)이 매우 뛰어납니다.",
     "status": "approved"
+  },
+  {
+    "repo": "financial-datasets/mcp-server",
+    "url": "https://github.com/financial-datasets/mcp-server",
+    "tool_name": "Financial Datasets MCP Server",
+    "description": "Financial Datasets API를 통해 주식 및 암호화폐의 재무제표, 가격 변동, 뉴스 등 시장의 구조적 데이터를 제공하는 MCP 서버",
+    "type": "mcp",
+    "capabilities": [
+      "재무제표(손익계산서, 대차대조표, 현금흐름표) 조회",
+      "주식 및 암호화폐의 실시간/과거 가격 데이터 획득",
+      "기업 관련 뉴스 및 암호화폐 티커 리스트 제공"
+    ],
+    "reasoning": "MCP 프로토콜을 준수하여 에이전트와의 결합성(Composability)이 매우 우수하며, 재무제표(Income, Balance, Cash Flow)와 같은 고가치의 정형 데이터(Structural Data)를 제공함. 다만, 데이터 소스가 외부 API에 의존적(External API Dependency)이므로 Local-First 원칙에 따라 감점 요인이 있으나, 분석 도구로서의 가치는 매우 높음.",
+    "status": "pending_approval"
+  },
+  {
+    "repo": "saidsurucu/borsa-mcp",
+    "url": "https://github.com/saidsurucu/borsa-mcp",
+    "tool_name": "borsa-mcp",
+    "description": "Borsa İstanbul(BIST) 및 미국 주식, TEFAS 펀드, 암호화폐, 거시 경제 데이터를 제공하는 MCP 서버",
+    "type": "mcp",
+    "capabilities": [
+      "BIST 및 US 주식 시장 데이터 조회",
+      "기술적 지표 스캐닝 (RSI, MACD, Supertrend 등)",
+      "펀드(TEFAS) 성능 및 포트폴리오 비교",
+      "암호화폐, 외환 및 원자재 가격 데이터",
+      "거시 경제 데이터(인플레이션 등) 및 경제 캘린더"
+    ],
+    "reasoning": "MCP(Model Context Protocol) 표준을 따르고 있어 에이전트와의 결합성(Composability)이 매우 뛰어나며, 뉴스 중심이 아닌 기술적 지표(RSI, MACD) 및 재무 데이터(ROE, ROIC, Altman Z-Score) 등 구조적 데이터(Structural Data)를 제공함. 원격(Remote) 사용 옵션이 강조되어 있으나, 본질적으로 로컬에서 MCP 서버로 구동 가능한 구조이므로 로컬 에이전트 생태계에 매우 적합함.",
+    "status": "pending_approval"
+  },
+  {
+    "repo": "thetahealth/mirobody",
+    "url": "https://github.com/thetahealth/mirobody",
+    "tool_name": "Mirobody",
+    "description": "개인화된 데이터와 AI를 연결하는 자가 호스팅(Self-hosted) 데이터 플랫폼이자 MCP/Agent Skill 엔진",
+    "type": "mcp",
+    "capabilities": [
+      "HTTP Remote MCP Server (Remote tool access)",
+      "Python-based Tool Definition (No complex JSON schemas required)",
+      "Universal Tool Adapter (Support for ChatGPT, Claude, Cursor, etc.)",
+      "Pluggable Data Providers (Integration of diverse structural datasets)",
+      "Privacy-First Local Execution"
+    ],
+    "reasoning": "Mirobody는 'Local-First'와 'Self-hosted'를 핵심 가치로 내세우는 플랫폼으로, 로컬 AI 에이전트 생태계 구축에 매우 적합합니다. 특히 Python 코드를 도구 정의로 직접 사용할 수 있어 개발 생산성이 높고, MCP(Model Context Protocol) 서버 및 클라이언트 역할을 동시에 수행할 수 있어 Composability(결합성)가 매우 뛰어납니다. 비록 현재 예시는 건강 데이터에 집중되어 있으나, 설계 구조상 Finance를 포함한 다양한 구조적 데이터(Structural Data)를 플러그인 형태로 통합할 수 있는 엔진 역할을 하므로, 주식/시장 데이터 분석을 위한 인프라로 활용 가치가 매우 높습니다.",
+    "status": "pending_approval"
+  },
+  {
+    "repo": "guangxiangdebizi/FinanceMCP",
+    "url": "https://github.com/guangxiangdebizi/FinanceMCP",
+    "tool_name": "FinanceMCP (Synapse)",
+    "description": "Tushare 및 Binance API를 통합하여 주식, 암호화폐, 채권, 거시 경제 지표 및 기술적 분석 데이터를 제공하는 전문 금융 데이터 MCP 서버입니다.",
+    "type": "mcp",
+    "capabilities": [
+      "실시간 기술적 지표 분석 (MACD, RSI, KDJ, BOLL, MA)",
+      "다양한 시장 데이터 제공 (A주, 미주, 홍콩주, 암호화폐, 외환 등)",
+      "거시 경제 데이터 조회 (GDP, CPI, PPI, PMI 등)",
+      "기업 펀더멘털 분석 (재무제표, 주주 구조, 경영진 정보)",
+      "지수 구성 종목 및 가치 지표(PE, PB, ROE) 분석",
+      "금융 뉴스 검색 및 분석"
+    ],
+    "reasoning": "이 도구는 MCP(Model Context Protocol) 표준을 따르는 서버로, 로컬 에이전트 환경에 직접 통합하기 매우 적합합니다. 단순 뉴스 크롤링을 넘어 MACD, RSI 등 기술적 지표와 재무제표(PE, PB, ROE 등)와 같은 구조적 데이터를 제공하므로 Principle 2를 완벽히 충족합니다. Tushare API 키가 필요하지만, 이는 외부 LLM(OpenAI 등)에 대한 의존성이 아닌 데이터 소스에 대한 접근권이므로 Principle 1(Local-First)에 위배되지 않으며, MCP 구조를 채택하여 에이전트 간 결합성(Principle 3)이 매우 높습니다.",
+    "status": "pending_approval"
+  },
+  {
+    "repo": "wshobson/maverick-mcp",
+    "url": "https://github.com/wshobson/maverick-mcp",
+    "tool_name": "MaverickMCP",
+    "description": "개인 투자자를 위한 전문 수준의 주식 분석 및 기술적 지표 계산, 백테스팅, 포트폴리오 최적화를 지원하는 MCP 서버",
+    "type": "mcp",
+    "capabilities": [
+      "Technical Analysis (SMA, EMA, RSI, MACD, Bollinger Bands)",
+      "Backtesting engine using VectorBT",
+      "Stock Screening (S&P 500 based strategies)",
+      "Portfolio Optimization",
+      "Historical and real-time stock data access"
+    ],
+    "reasoning": "MaverickMCP는 로컬에서 구동 가능한 MCP 서버로, Python 기반의 강력한 금융 데이터 분석 기능을 제공합니다. 뉴스 위주의 단순 정보 제공이 아닌, 기술적 지표(RSI, MACD 등), 백테스팅(VectorBT), 포트폴리오 최적화와 같은 구조적 데이터를 다루며, MCP 프로토콜을 통해 다른 에이전트와 결합하기 매우 용이한 구조를 가지고 있습니다. 외부 유료 API 의존성 없이 로컬 분석에 집중되어 있어 Low-Latency 원칙에도 부합합니다.",
+    "status": "pending_approval"
+  },
+  {
+    "repo": "GuntharDeNiro/gunbot-quant",
+    "url": "https://github.com/GuntharDeNiro/gunbot-quant",
+    "tool_name": "Gunbot Quant",
+    "description": "크립토 및 주식 시장의 정량적 분석을 위한 로컬용 퀀트 툴킷으로, 시장 스크리닝과 포트폴리오 백테스팅 기능을 제공함.",
+    "type": "mcp",
+    "capabilities": [
+      "Technical Indicator-based Market Screening",
+      "Portfolio-level Strategy Backtesting",
+      "Quantitative Performance Analytics (Sharpe, Max Drawdown, etc.)",
+      "Market Character Heuristics Analysis"
+    ],
+    "reasoning": "로컬 구동을 전제로 설계된 self-hosted 도구이며, 단순 뉴스 분석이 아닌 RSI, SMA, ADX 등 구조적 기술 지표와 재무적 특성(유동성, 변동성)을 다룸. FastAPI 기반의 Python 패키지 구조를 가지고 있어 MCP 서버로 구축하여 에이전트의 분석 능력(Skill)으로 확장하기에 매우 적합함.",
+    "status": "pending_approval"
+  },
+  {
+    "repo": "codeplayr/alphacate",
+    "url": "https://github.com/codeplayr/alphacate",
+    "tool_name": "Alphacate",
+    "description": "기술적 및 정량적 주식 분석을 위해 다양한 기술적 지표(Bollinger Bands, MACD, RSI 등)의 수학적 계산 기능을 제공하는 Node.js 툴킷",
+    "type": "skill",
+    "capabilities": [
+      "기술적 지표 계산 (RSI, MACD, Bollinger Bands, EMA 등)",
+      "정량적 주식 데이터 분석",
+      "수학적 모멘텀 및 변동성 지표 산출"
+    ],
+    "reasoning": "외부 API 의존성 없이 로컬에서 모든 연산을 수행하는 'Local-First' 도구이며, 뉴스나 가십이 아닌 기술적 지표라는 'Structural Data'를 다룸. Node.js 기반이지만 클래스/모듈 중심의 구조(Composability)가 뛰어나, MCP 서버나 별도의 Skill로 래핑하여 파이썬 에이전트와 결합하기 매우 용이함.",
+    "status": "pending_approval"
   }
 ]

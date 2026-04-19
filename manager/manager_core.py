@@ -87,7 +87,7 @@ class OllamaClient:
             logger.error(f"Ollama 오류: {e}")
             return f"AI 분석 중 오류가 발생했습니다: {str(e)[:100]}"
     
-    def analyze_intent(self, user_input: str, principles: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def analyze_intent(self, user_input: str, principles: List[Dict[str, Any]], user_profile: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """의도 분석"""
         principles_text = "\n".join([
             f"- {p.get('content', '')}" 
@@ -103,9 +103,13 @@ class OllamaClient:
             for t in tools
         ]) if tools else "사용 가능한 도구 없음"
         
+        profile_text = ""
+        if user_profile and user_profile.get("profile"):
+            profile_text = f"\n[사용자 성향/피드백]\n{user_profile['profile']}\n이 성향을 최우선으로 반영하여 도구를 선택해줘."
+        
         system = f"""너는 투자 분석 전문가야. 
 사용자의 질문에서 투자 의도를 분석하고 아래 제공된 도구 중에서 가장 적절한 도구를 선택해줘.
-반드시 제공된 도구의 'name' 중 하나를 선택해야 해.
+반드시 제공된 도구의 'name' 중 하나를 선택해야 해.{profile_text}
 
 [사용 가능한 도구]
 {tools_text}
@@ -143,7 +147,8 @@ class OllamaClient:
     
     def finalize_report(self, worker_result: Dict[str, Any], 
                         principles: List[Dict[str, Any]], 
-                        user_input: str) -> str:
+                        user_input: str,
+                        user_profile: Optional[Dict[str, Any]] = None) -> str:
         """최종 리포트 생성"""
         principles_text = "\n".join([
             f"- {p.get('content', '')}" 
@@ -158,10 +163,14 @@ class OllamaClient:
             except:
                 worker_text = str(worker_result)
         
-        system = """너는 투자 고문 역할을 해.
+        profile_text = ""
+        if user_profile and user_profile.get("profile"):
+            profile_text = f"\n\n[중요: 사용자 성향/피드백 반영]\n다음은 사용자의 선호도 및 이전 피드백입니다:\n{user_profile['profile']}\n이 성향을 반드시 최우선으로 반영하여 리포트의 형식, 강조점, 어조를 최적화해."
+        
+        system = f"""너는 투자 고문 역할을 해.
 워커의 분석 결과와 저장된 투자 원칙을 결합하여,
 사용자에게 명확하고 실행 가능한 투자 지혜를 제공해.
-전문적이면서도 이해하기 쉽게 작성해."""
+전문적이면서도 이해하기 쉽게 작성해.{profile_text}"""
         
         user = f"""사용자 질문: {user_input}
 
@@ -212,14 +221,15 @@ class ManagerCore:
         user_id = state.get("user_id", "default")
         
         try:
-            # 1. 관련 원칙 검색 (RAG)
+            # 1. 관련 원칙 검색 (RAG) 및 사용자 성향 조회
             principles = self.memory.get_relevant_principles(
                 query=user_input,
                 n_results=5
             )
+            user_profile = self.memory.get_user_profile(user_id)
             
             # 2. LLM으로 의도 분석
-            analysis = self.llm.analyze_intent(user_input, principles)
+            analysis = self.llm.analyze_intent(user_input, principles, user_profile)
             
             state["selected_tool"] = analysis.get("required_tool", "market_flow")
             state["tool_params"] = analysis.get("params", {"query": user_input})
@@ -307,10 +317,14 @@ class ManagerCore:
         worker_result = state.get("worker_result", {})
         principles = state.get("applied_principles", [])
         user_input = state.get("user_input", "")
+        user_id = state.get("user_id", "default")
         
         try:
+            # 사용자 성향 조회
+            user_profile = self.memory.get_user_profile(user_id)
+            
             # LLM으로 최종 리포트 생성
-            final_report = self.llm.finalize_report(worker_result, principles, user_input)
+            final_report = self.llm.finalize_report(worker_result, principles, user_input, user_profile)
             state["final_report"] = final_report
             
             # 작업 로그 저장
@@ -367,6 +381,46 @@ class ManagerCore:
             "worker_summary": result.get("worker_summary"),
             "error": result.get("error")
         }
+
+
+    def process_feedback(self, user_id: str, task_id: str, feedback_text: str) -> bool:
+        """
+        사용자 피드백을 분석하여 성향을 업데이트하는 Self-Reflection Loop
+        """
+        try:
+            logger.info(f"피드백 처리 시작 - User: {user_id}")
+            
+            # 1. 피드백 저장
+            self.memory.save_feedback(task_id, "preference", feedback_text, rating=None)
+            
+            # 2. 기존 사용자 성향 조회
+            current_profile = self.memory.get_user_profile(user_id)
+            current_text = current_profile.get("profile", "초기 설정된 성향이 없습니다.") if current_profile else "초기 설정된 성향이 없습니다."
+            
+            # 3. LLM을 통한 성향 업데이트 (Self-Reflection)
+            system_prompt = """너는 사용자의 피드백을 분석하여 투자 성향 프로필을 지속적으로 최적화하는 '성향 분석가'야.
+기존 프로필과 새로운 피드백을 바탕으로, 앞으로 AI 에이전트가 어떤 도구를 우선적으로 선택하고 어떤 형식(포맷, 어조, 초점)으로 리포트를 작성해야 할지 지침을 만들어줘.
+최종 결과물은 다음 에이전트가 프롬프트로 바로 사용할 수 있도록 간결하고 명확한 지시문 형태로 작성해야 해."""
+            
+            user_prompt = f"""[기존 프로필]
+{current_text}
+
+[새로운 피드백]
+{feedback_text}
+
+위 피드백을 반영하여 사용자 프로필 지시문을 업데이트해줘."""
+            
+            updated_profile_text = self.llm.chat(system_prompt, user_prompt)
+            
+            # 4. 새로운 성향 저장
+            success = self.memory.save_user_profile(user_id, updated_profile_text)
+            if success:
+                logger.info(f"사용자 성향 업데이트 완료:\n{updated_profile_text}")
+            return success
+            
+        except Exception as e:
+            logger.error(f"피드백 처리 중 오류 발생: {e}")
+            return False
 
 
 # ==================== 테스트 ====================
