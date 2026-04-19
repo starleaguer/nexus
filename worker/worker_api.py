@@ -13,15 +13,24 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
 import ollama
+from shared.config_loader import NexusConfig
 
-# 매니페스트에서 모델 로드
-PROJECT_ROOT = Path(__file__).parent.parent
-with open(PROJECT_ROOT / "shared" / "manifest.json", encoding='utf-8') as f:
-    _MANIFEST = json.load(f)
-WORKER_MODEL = _MANIFEST.get("models", {}).get("worker", "gemma2:9b")
-
-# 매니저 연결 정보
-MANAGER_URL = os.getenv("MANAGER_URL", "http://localhost:9000")
+# ==================== 설정 ====================
+class Config:
+    """Worker 설정 관리 (중앙 로더 사용)"""
+    PROJECT_ROOT = NexusConfig.PROJECT_ROOT
+    MANIFEST_PATH = NexusConfig.MANIFEST_PATH
+    
+    # 설정 로드
+    _MANIFEST = NexusConfig.load_manifest()
+    
+    WORKER_MODEL = NexusConfig.get_model("worker")
+    MANAGER_URL = NexusConfig.get_manager_url()
+    
+    # 네트워크 설정
+    HOST = NexusConfig.get_path("worker.host", "0.0.0.0")
+    url = NexusConfig.get_worker_url()
+    PORT = int(url.split(":")[-1])
 
 # 스킬 디렉토리
 SKILLS_DIR = Path(__file__).parent / "skills"
@@ -31,10 +40,8 @@ SKILLS_REGISTRY = {}
 
 
 def load_manifest():
-    """매니페스트에서 스킬 로드"""
-    manifest_path = os.path.join(os.path.dirname(__file__), "../shared/manifest.json")
-    with open(manifest_path, "r", encoding='utf-8') as f:
-        return json.load(f)
+    """매니페스트 로드 (중앙 로더 사용)"""
+    return NexusConfig.load_manifest()
 
 
 def discover_skills():
@@ -134,7 +141,7 @@ def summarize_with_ollama(raw_result: Dict[str, Any]) -> str:
 """
         
         response = ollama.chat(
-            model=WORKER_MODEL,  # 매니페스트에서 로드
+            model=Config.WORKER_MODEL,  # 중앙 설정 사용
             messages=[{"role": "user", "content": prompt}]
         )
         
@@ -247,6 +254,6 @@ if __name__ == "__main__":
     worker_config = manifest.get("worker", {})
     uvicorn.run(
         app,
-        host=worker_config.get("host", "0.0.0.0"),  # 외부 접속 허용
-        port=worker_config.get("port", 8000)
+        host=Config.HOST,
+        port=Config.PORT
     )

@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 import logging
+from shared.config_loader import NexusConfig
 
 # 프로젝트 루트 경로
 PROJECT_ROOT = Path(__file__).parent
@@ -28,42 +29,23 @@ class Config:
     RETRY_DELAY = 2           # 재시도 간격 (초)
     WORKER_TIMEOUT = 30       # Worker 요청 타임아웃 (초)
     OLLAMA_TIMEOUT = 20       # Ollama 요청 타임아웃 (초)
+    
+    # 설정 로더 사용
+    DEFAULT_IP = "127.0.0.1"  # config_loader에서 처리됨
+    DEFAULT_PORT = 8000
+    MANIFEST_PATH = NexusConfig.MANIFEST_PATH
 
 
 def load_manifest() -> dict:
-    """매니페스트에서 도구 목록 로드"""
-    manifest_path = PROJECT_ROOT / "shared" / "manifest.json"
-    try:
-        with open(manifest_path, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except FileNotFoundError:
-        logger.error(f"매니페스트 파일을 찾을 수 없음: {manifest_path}")
-        return {"version": "1.0.0", "tools": {"skills": [], "mcp": []}, "worker": {}}
-    except json.JSONDecodeError as e:
-        logger.error(f"매니페스트 JSON 파싱 오류: {e}")
-        return {"version": "1.0.0", "tools": {"skills": [], "mcp": []}, "worker": {}}
+    """매니페스트 로드 (중앙 로더 사용)"""
+    return NexusConfig.load_manifest()
 
 
 def get_worker_url() -> str:
-    """RTX Worker URL 가져오기 (환경 변수 또는 설정)"""
-    # 환경 변수에서 우선 확인
-    worker_url = os.getenv("WORKER_URL")
-    if worker_url:
-        logger.info(f"환경 변수에서 Worker URL 로드: {worker_url}")
-        return worker_url
-    
-    # 매니페스트에서 RTX IP 읽기
-    try:
-        manifest = load_manifest()
-        worker_config = manifest.get("worker", {})
-        rtx_ip = os.getenv("RTX_IP", worker_config.get("ip", "192.168.1.100"))
-        rtx_port = worker_config.get("port", 8000)
-        url = f"http://{rtx_ip}:{rtx_port}"
-        logger.info(f"매니페스트에서 Worker URL 생성: {url}")
-        return url
-    except Exception as e:
-        logger.warning(f"Worker URL 생성 실패, 기본값 사용: {e}")
-        return "http://192.168.1.100:8000"
+    """RTX Worker URL 가져오기 (중앙 로더 사용)"""
+    url = NexusConfig.get_worker_url()
+    logger.info(f"Worker URL 확인: {url}")
+    return url
 
 
 def build_system_prompt(manifest: dict) -> str:
@@ -315,15 +297,11 @@ async def safe_execute_workflow(manager, user_input: str, user_id: str) -> dict:
 
 def main():
     """메인 함수"""
-    # RTX IP 환경 변수 설정 (기본값)
-    if "RTX_IP" not in os.environ:
-        try:
-            manifest = load_manifest()
-            rtx_ip = manifest.get("worker", {}).get("ip", "192.168.1.100")
-            os.environ["RTX_IP"] = rtx_ip
-            print(f"RTX IP 기본값 설정: {rtx_ip}")
-        except Exception as e:
-            logger.warning(f"RTX IP 설정 실패: {e}")
+    # 중앙 설정 초기화
+    url = NexusConfig.get_worker_url()
+    rtx_ip = url.split("//")[-1].split(":")[0]
+    os.environ["RTX_IP"] = rtx_ip
+    print(f"시스템 설정 완료 (RTX IP: {rtx_ip})")
     
     # 비동기 테스트 실행
     try:

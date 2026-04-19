@@ -17,9 +17,10 @@ except ImportError:
 class MemoryManager:
     """메모리 관리자 - 작업 로그, 피드백, 투자 원칙, 사용자 성향 저장"""
     
-    def __init__(self, db_path: str = "shared/database.db", vector_store_path: str = "manager/vector_store"):
-        self.db_path = db_path
-        self.vector_store_path = vector_store_path
+    def __init__(self, db_path: Optional[str] = None, vector_store_path: Optional[str] = None):
+        # 환경 변수 또는 기본값 사용
+        self.db_path = db_path or os.getenv("DB_PATH", "shared/database.db")
+        self.vector_store_path = vector_store_path or os.getenv("VECTOR_STORE_PATH", "manager/vector_store")
         self._init_sqlite()
         self._init_chroma()
     

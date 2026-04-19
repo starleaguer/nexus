@@ -11,6 +11,7 @@ import asyncio
 import os
 import json
 import logging
+from shared.config_loader import NexusConfig
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -21,12 +22,7 @@ from manager.memory_manager import MemoryManager
 
 
 # ==================== 설정 로드 ====================
-def load_config() -> dict:
-    """매니페스트에서 설정 로드"""
-    with open(Path(__file__).parent.parent / "shared" / "manifest.json") as f:
-        return json.load(f)
-
-_CONFIG = load_config()
+_CONFIG = NexusConfig.load_manifest()
 
 # ==================== 설정 ====================
 class Config:
@@ -35,9 +31,10 @@ class Config:
     RETRY_DELAY = 2
     WORKER_TIMEOUT = 30
     OLLAMA_TIMEOUT = 20
-
-# 매니페스트에서 모델 로드 (하드코딩 제거)
-MANAGER_MODEL = _CONFIG.get("models", {}).get("manager", "gemma2:27b")
+    
+    # 설정 로더 사용
+    MANAGER_MODEL = NexusConfig.get_model("manager")
+    DEFAULT_WORKER_URL = NexusConfig.get_worker_url()
 
 
 # ==================== AgentState 정의 ====================
@@ -70,7 +67,7 @@ class OllamaClient:
     """Ollama 클라이언트"""
     
     def __init__(self, model: str = None):
-        self.model = model or MANAGER_MODEL  # 매니페스트에서 로드
+        self.model = model or Config.MANAGER_MODEL  # Config에서 로드
     
     def chat(self, system: str, user: str, timeout: int = Config.OLLAMA_TIMEOUT) -> str:
         """채팅 응답 생성"""
@@ -97,14 +94,25 @@ class OllamaClient:
             for p in principles
         ]) if principles else "적용된 원칙 없음"
         
-        system = """너는 투자 분석 전문가야. 
-사용자의 질문에서 투자 의도를 분석하고 적절한 도구를 선택해줘.
+        tools = _CONFIG.get("tools", {}).get("skills", [])
+        tools_text = "\n".join([
+            f"- {t.get('name')}: {t.get('description')} (capabilities: {', '.join(t.get('capabilities', []))})" 
+            for t in tools
+        ]) if tools else "사용 가능한 도구 없음"
+        
+        system = f"""너는 투자 분석 전문가야. 
+사용자의 질문에서 투자 의도를 분석하고 아래 제공된 도구 중에서 가장 적절한 도구를 선택해줘.
+반드시 제공된 도구의 'name' 중 하나를 선택해야 해.
+
+[사용 가능한 도구]
+{tools_text}
+
 응답은 JSON 형태로 반환해:
-{
+{{
     "intent": "분석된 의도",
-    "required_tool": "필요한 도구 이름",
-    "params": {"키": "값"}
-}"""
+    "required_tool": "선택한 도구 이름",
+    "params": {{"query": "값"}}
+}}"""
         
         user = f"""사용자 질문: {user_input}
 
@@ -172,7 +180,7 @@ class ManagerCore:
     def __init__(self):
         self.llm = OllamaClient()  # 매니페스트 모델 사용
         self.memory = MemoryManager()
-        self.worker_url = os.getenv("WORKER_URL", "http://localhost:8000")
+        self.worker_url = os.getenv("WORKER_URL", Config.DEFAULT_WORKER_URL)
         self.graph = self._build_graph()
     
     def _build_graph(self) -> StateGraph:
