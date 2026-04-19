@@ -27,8 +27,8 @@ class Config:
     """설정 관리"""
     MAX_RETRIES = 3           # 최대 재시도 횟수
     RETRY_DELAY = 2           # 재시도 간격 (초)
-    WORKER_TIMEOUT = 30       # Worker 요청 타임아웃 (초)
-    OLLAMA_TIMEOUT = 20       # Ollama 요청 타임아웃 (초)
+    WORKER_TIMEOUT = NexusConfig.get_timeout("worker", 60)
+    OLLAMA_TIMEOUT = NexusConfig.get_timeout("ollama", 60)
     
     # 설정 로더 사용
     DEFAULT_IP = "127.0.0.1"  # config_loader에서 처리됨

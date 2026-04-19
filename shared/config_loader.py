@@ -93,6 +93,20 @@ class NexusConfig:
         env_key = key.replace('.', '_').upper()
         return os.getenv(env_key, val or default)
 
+    @classmethod
+    def get_timeout(cls, key: str, default: int) -> int:
+        """타임아웃 설정을 가져옵니다."""
+        manifest = cls.load_manifest()
+        # 매니페스트에서 timeouts 섹션 확인
+        val = manifest.get("timeouts", {}).get(key)
+        
+        env_key = f"{key.upper()}_TIMEOUT"
+        return int(os.getenv(env_key, val or default))
+
+# 기본 타임아웃 상수
+DEFAULT_WORKER_TIMEOUT = 60
+DEFAULT_OLLAMA_TIMEOUT = 60
+
 # 사용 편의를 위한 인스턴스/상수 제공
 def get_config():
     NexusConfig.load_manifest()

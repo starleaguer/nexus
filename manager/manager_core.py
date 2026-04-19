@@ -29,8 +29,8 @@ class Config:
     """설정"""
     MAX_RETRIES = 3
     RETRY_DELAY = 2
-    WORKER_TIMEOUT = 30
-    OLLAMA_TIMEOUT = 20
+    WORKER_TIMEOUT = NexusConfig.get_timeout("worker", 60)
+    OLLAMA_TIMEOUT = NexusConfig.get_timeout("ollama", 60)
     
     # 설정 로더 사용
     MANAGER_MODEL = NexusConfig.get_model("manager")
