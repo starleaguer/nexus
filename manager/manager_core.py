@@ -152,6 +152,10 @@ JSON 응답 형식:
 
 의도를 분석하고 도구를 선택해줘."""
         
+        user = f"""사용자 질문: {user_input}
+
+위 질문에 대해 JSON 형식으로 분석 의도를 명시하고 필요한 도구를 선택해줘."""
+        
         result = self.chat(system, user)
         
         # JSON 파싱 시도
