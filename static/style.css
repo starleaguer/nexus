@@ -377,3 +377,128 @@ body {
     padding: 50px;
     color: var(--text-muted);
 }
+
+/* ==================== YouTube Knowledge Feeder ==================== */
+.yt-input-area {
+    margin-bottom: 10px;
+}
+
+.yt-input-area .input-wrapper {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--glass-border);
+    border-radius: 16px;
+    padding: 15px 20px;
+}
+
+.yt-input-area #yt-url-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: white;
+    font-size: 15px;
+    outline: none;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.yt-summary-card {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--glass-border);
+    border-radius: 20px;
+    padding: 28px;
+    border-left: 4px solid #ff4444;
+    animation: fadeIn 0.4s ease;
+}
+
+.yt-card-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 18px;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.yt-summary-body {
+    font-size: 0.95rem;
+    line-height: 1.75;
+    color: #e2e8f0;
+    margin-bottom: 24px;
+    max-height: 350px;
+    overflow-y: auto;
+    padding-right: 8px;
+}
+
+.yt-note-area {
+    border-top: 1px solid var(--glass-border);
+    padding-top: 20px;
+}
+
+.yt-note-area textarea {
+    width: 100%;
+    min-height: 90px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--glass-border);
+    border-radius: 10px;
+    color: white;
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.95rem;
+    padding: 12px 15px;
+    outline: none;
+    resize: vertical;
+    transition: border-color 0.2s;
+}
+
+.yt-note-area textarea:focus {
+    border-color: rgba(138, 43, 226, 0.6);
+}
+
+/* config cards h2 fix */
+.config-card h2 {
+    margin-bottom: 20px;
+    font-size: 1.1rem;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.model-select-group {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.select-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.select-wrapper label {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.select-wrapper select,
+.select-wrapper input[type="number"] {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--glass-border);
+    color: white;
+    padding: 10px 12px;
+    border-radius: 8px;
+    outline: none;
+    font-size: 0.9rem;
+    font-family: 'Outfit', sans-serif;
+    cursor: pointer;
+    transition: border-color 0.2s;
+}
+
+.select-wrapper select:focus,
+.select-wrapper input[type="number"]:focus {
+    border-color: rgba(138, 43, 226, 0.5);
+}
+
+.select-wrapper select option {
+    background: #0d0d0d;
+}

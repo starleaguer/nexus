@@ -19,22 +19,17 @@ class NexusConfig:
 
     @classmethod
     def load_manifest(cls):
-        """매니페스트 파일을 로드합니다."""
-        if cls._manifest is not None:
-            return cls._manifest
-        
+        """매니페스트 파일을 로드합니다. (실시간 반영을 위해 캐시를 사용하지 않습니다)"""
         try:
             if MANIFEST_PATH.exists():
                 with open(MANIFEST_PATH, "r", encoding="utf-8") as f:
-                    cls._manifest = json.load(f)
+                    return json.load(f)
             else:
                 logger.warning(f"매니페스트 파일을 찾을 수 없습니다: {MANIFEST_PATH}")
-                cls._manifest = {}
+                return {}
         except Exception as e:
             logger.error(f"매니페스트 로드 중 오류 발생: {e}")
-            cls._manifest = {}
-        
-        return cls._manifest
+            return {}
 
     @classmethod
     def get_model(cls, component: str, default: str = None) -> str:

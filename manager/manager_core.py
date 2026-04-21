@@ -29,12 +29,23 @@ class Config:
     """설정"""
     MAX_RETRIES = 3
     RETRY_DELAY = 2
-    WORKER_TIMEOUT = NexusConfig.get_timeout("worker", 60)
-    OLLAMA_TIMEOUT = NexusConfig.get_timeout("ollama", 60)
     
-    # 설정 로더 사용
-    MANAGER_MODEL = NexusConfig.get_model("manager")
-    DEFAULT_WORKER_URL = NexusConfig.get_worker_url()
+    @property
+    def WORKER_TIMEOUT(self):
+        return NexusConfig.get_timeout("worker", 60)
+    
+    @property
+    def OLLAMA_TIMEOUT(self):
+        return NexusConfig.get_timeout("ollama", 60)
+    
+    @property
+    def WORKER_URL(self):
+        """Worker 서버의 URL을 동적으로 가져옵니다."""
+        return os.getenv("WORKER_URL", NexusConfig.get_worker_url())
+
+    @property
+    def MANAGER_MODEL(self):
+        return NexusConfig.get_model("manager")
 
 
 # ==================== AgentState 정의 ====================
@@ -67,15 +78,18 @@ class OllamaClient:
     """Ollama 클라이언트"""
     
     def __init__(self, model: str = None):
-        self.model = model or Config.MANAGER_MODEL  # Config에서 로드
+        # 인스턴스 생성 시점에 가장 최신 모델을 가져오거나 명시된 모델 사용
+        self.model = model or NexusConfig.get_model("manager")
     
-    def chat(self, system: str, user: str, timeout: int = Config.OLLAMA_TIMEOUT) -> str:
+    def chat(self, system: str, user: str, timeout: int = None) -> str:
         """채팅 응답 생성"""
         import ollama
+        actual_timeout = timeout or NexusConfig.get_timeout("ollama", 60)
         
         try:
-            # ollama.chat은 동기 함수이므로 직접 호출
-            response = ollama.chat(
+            from ollama import Client
+            client = Client(timeout=actual_timeout)
+            response = client.chat(
                 model=self.model,
                 messages=[
                     {"role": "system", "content": system},
@@ -107,8 +121,8 @@ class OllamaClient:
         if user_profile and user_profile.get("profile"):
             profile_text = f"\n[사용자 성향/피드백]\n{user_profile['profile']}\n이 성향을 최우선으로 반영하여 도구를 선택해줘."
         
-        system = f"""너는 투자 분석 전문가야. 
-사용자의 질문에서 투자 의도를 분석하고 아래 제공된 도구 중에서 가장 적절한 도구를 선택해줘.
+        system = f"""너는 다목적 AI 매니저 및 시스템 아키텍트야. 
+사용자의 질문에서 의도(투자 분석, 시스템 설정, 코드 수정, 도구 추가 등)를 분석하고 아래 제공된 도구 중에서 가장 적절한 도구를 선택해줘.
 반드시 제공된 도구의 'name' 중 하나를 선택해야 해.{profile_text}
 
 [사용 가능한 도구]
@@ -167,20 +181,20 @@ class OllamaClient:
         if user_profile and user_profile.get("profile"):
             profile_text = f"\n\n[중요: 사용자 성향/피드백 반영]\n다음은 사용자의 선호도 및 이전 피드백입니다:\n{user_profile['profile']}\n이 성향을 반드시 최우선으로 반영하여 리포트의 형식, 강조점, 어조를 최적화해."
         
-        system = f"""너는 투자 고문 역할을 해.
-워커의 분석 결과와 저장된 투자 원칙을 결합하여,
-사용자에게 명확하고 실행 가능한 투자 지혜를 제공해.
-전문적이면서도 이해하기 쉽게 작성해.{profile_text}"""
+        system = f"""너는 Nexus 시스템을 총괄하는 다목적 AI 매니저 및 아키텍트야.
+사용자에게 명확하고 실행 가능한 답변을 제공하되, 결론을 내기 전 반드시 세 가지 상반된 시각(낙관, 비관, 중립)에서 검토하고 그 이면의 구조적 결함이 없는지 확인하여 리포트를 작성해.
+워커의 분석/작업 결과와 저장된 원칙을 결합하여 분석을 수행해.
+작업이 코드 수정이나 시스템 업데이트인 경우, 변경된 사항과 성공 여부를 명확히 요약해줘. 전문적이면서도 이해하기 쉽게 작성해.{profile_text}"""
         
         user = f"""사용자 질문: {user_input}
 
 워커 분석 결과:
 {worker_text}
 
-적용된 투자 원칙:
+적용된 원칙:
 {principles_text}
 
-최종 투자 리포트를 작성해줘."""
+최종 응답(리포트 또는 작업 결과 요약)을 작성해줘."""
         
         return self.chat(system, user)
 
@@ -190,10 +204,19 @@ class ManagerCore:
     """메니저 코어 - LangGraph 기반 워크플로우"""
     
     def __init__(self):
-        self.llm = OllamaClient()  # 매니페스트 모델 사용
+        self.config = Config() # 인스턴스 생성하여 다이나믹 설정 지원
         self.memory = MemoryManager()
-        self.worker_url = os.getenv("WORKER_URL", Config.DEFAULT_WORKER_URL)
         self.graph = self._build_graph()
+
+    @property
+    def llm(self):
+        """매니페스트 모델 설정을 실시간으로 반영하는 LLM 클라이언트"""
+        return OllamaClient(model=self.config.MANAGER_MODEL)
+
+    @property
+    def worker_url(self):
+        """동적으로 계산된 워커 URL"""
+        return self.config.WORKER_URL
     
     def _build_graph(self) -> StateGraph:
         """LangGraph 빌드"""
@@ -226,6 +249,17 @@ class ManagerCore:
                 query=user_input,
                 n_results=5
             )
+            
+            # [First Principles] 시스템 제1원리 강제 적용
+            first_principle = {
+                "id": "core_001",
+                "content": "모든 현상을 이원성의 균형 속에서 파악하고, 본질적인 구조와 흐름을 먼저 분석하라",
+                "category": "core"
+            }
+            # 중복 방지하며 맨 앞에 추가
+            if not any(p.get("content") == first_principle["content"] for p in principles):
+                principles.insert(0, first_principle)
+                
             user_profile = self.memory.get_user_profile(user_id)
             
             # 2. LLM으로 의도 분석
@@ -259,10 +293,10 @@ class ManagerCore:
         last_error = None
         
         # 재시도 루프
-        for attempt in range(Config.MAX_RETRIES):
+        for attempt in range(self.config.MAX_RETRIES):
             try:
                 async with aiohttp.ClientSession(
-                    timeout=aiohttp.ClientTimeout(total=Config.WORKER_TIMEOUT)
+                    timeout=aiohttp.ClientTimeout(total=self.config.WORKER_TIMEOUT)
                 ) as session:
                     payload = {
                         "tool_name": tool_name,
@@ -291,17 +325,17 @@ class ManagerCore:
                             
             except aiohttp.ClientConnectorError as e:
                 last_error = f"연결 실패: {str(e)}"
-                logger.warning(f"[call_worker] 연결 실패 (시도 {attempt + 1}/{Config.MAX_RETRIES})")
+                logger.warning(f"[call_worker] 연결 실패 (시도 {attempt + 1}/{self.config.MAX_RETRIES})")
             except asyncio.TimeoutError:
                 last_error = "타임아웃"
-                logger.warning(f"[call_worker] 타임아웃 (시도 {attempt + 1}/{Config.MAX_RETRIES})")
+                logger.warning(f"[call_worker] 타임아웃 (시도 {attempt + 1}/{self.config.MAX_RETRIES})")
             except Exception as e:
                 last_error = str(e)
-                logger.error(f"[call_worker] 예외: {e}")
+                logger.warning(f"[call_worker] 알 수 없는 오류 (시도 {attempt + 1}/{self.config.MAX_RETRIES}): {e}")
             
             # 재시도 전 대기
-            if attempt < Config.MAX_RETRIES - 1:
-                await asyncio.sleep(Config.RETRY_DELAY)
+            if attempt < self.config.MAX_RETRIES - 1:
+                await asyncio.sleep(self.config.RETRY_DELAY)
         
         # 모든 재시도 실패
         state["error"] = f"Worker 연결 실패: {last_error}"
@@ -349,13 +383,14 @@ class ManagerCore:
         return state
     
     # ==================== 실행 ====================
-    async def run(self, user_input: str, user_id: str = "default") -> Dict[str, Any]:
+    async def run(self, user_input: str, user_id: str = "default", is_autonomous: bool = False) -> Dict[str, Any]:
         """
         작업 실행
         
         Args:
             user_input: 사용자 질문
             user_id: 사용자 ID
+            is_autonomous: 자율 모드 여부
         
         Returns:
             최종 결과 (리포트, 적용된 원칙, 워커 결과)
@@ -373,6 +408,13 @@ class ManagerCore:
         )
         
         result = await self.graph.ainvoke(initial_state)
+        
+        if is_autonomous:
+            if result.get("final_report"):
+                self.memory.save_autonomous_log(result.get("final_report"))
+        else:
+            # [Evolving Agent] 세션 종료 후 비동기로 성찰(Reflection) 수행
+            asyncio.create_task(self.self_reflection(result))
         
         return {
             "final_report": result.get("final_report"),
@@ -421,6 +463,31 @@ class ManagerCore:
         except Exception as e:
             logger.error(f"피드백 처리 중 오류 발생: {e}")
             return False
+
+    async def self_reflection(self, state: AgentState):
+        """세션 종료 후 에이전트 스스로의 학습(Reflection) 수행"""
+        user_input = state.get("user_input", "")
+        final_report = state.get("final_report", "")
+        if not final_report: return
+        
+        system_prompt = "너는 자신의 분석을 비판적으로 검토하고 사용자의 의도를 깊이 이해하여 학습하는 '자아성찰 에이전트'야."
+        user_prompt = f"""
+최근 대화 내용:
+사용자 질문: {user_input}
+에이전트 답변: {final_report[:1000]}...
+
+위 대화에서 에이전트가 앞으로의 분석을 위해 '배운 점' 또는 '사용자 취향'을 한 문장으로 요약해줘.
+예: "사용자는 거시 경제보다 개별 기업의 재무 건전성에 더 높은 비중을 둡니다."
+중요: 사용자가 구체적으로 지적한 사항이나 선호가 보일 때만 작성하고, 내용이 뻔하거나 학습할 점이 없다면 '없음'이라고 답해줘.
+"""
+        try:
+            # 성찰을 위한 LLM 호출 (타임아웃 30초)
+            reflection = self.llm.chat(system_prompt, user_prompt, timeout=30)
+            if reflection and "없음" not in reflection:
+                self.memory.save_learning(reflection)
+                logger.info(f"[Evolving Agent] 새로운 학습 내용 저장: {reflection}")
+        except Exception as e:
+            logger.error(f"성찰 도중 오류: {e}")
 
 
 # ==================== 테스트 ====================

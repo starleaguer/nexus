@@ -9,6 +9,17 @@
   "tools": {
     "skills": [
       {
+        "name": "nexus_architect",
+        "description": "시스템 자체 코드를 읽고, LLM을 통해 수정안을 생성 및 자체 검증(Self-Review)한 뒤 안전하게 파일에 덮어쓰는 Auto-Coder 스킬",
+        "entry": "worker/skills/nexus_architect.py",
+        "capabilities": [
+          "시스템 소스 코드 수정",
+          "코드 생성 및 반영",
+          "파일 백업 및 쓰기",
+          "자체 보안 검수 및 검증"
+        ]
+      },
+      {
         "name": "market_flow",
         "description": "시장 흐름 분석 스킬",
         "entry": "worker/skills/market_flow.py",
@@ -17,6 +28,16 @@
           "trend_detection",
           "sector_analysis",
           "volume_analysis"
+        ]
+      },
+      {
+        "name": "youtube_summarizer",
+        "description": "유튜브 영상 URL을 받아 자막 추출 또는 Whisper 음성 인식을 통해 내용을 요약용 텍스트로 반환하는 스킬",
+        "entry": "worker/skills/youtube_summarizer.py",
+        "capabilities": [
+          "youtube_transcript_extraction",
+          "whisper_voice_to_text",
+          "metadata_extraction"
         ]
       }
     ],
@@ -103,8 +124,15 @@
       }
     ]
   },
+  "timeouts": {
+    "worker": 120,
+    "ollama": 120
+  },
+  "autonomous": {
+    "interval": 36000
+  },
   "worker": {
-    "mode": "local",
+    "mode": "remote",
     "host": "0.0.0.0",
     "port": 8000,
     "ip": "192.168.219.115"

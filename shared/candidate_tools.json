@@ -169,5 +169,99 @@
     ],
     "reasoning": "MCP 표준을 준수하며, 가장 큰 장점인 'API 키가 필요 없는 로컬 구동 가능성'이 Principle 1에 완벽히 부합합니다. Reddit 데이터를 LLM에 최적화된 형태로 제공하여 에이전트의 사회적 트렌드 분석 및 리서치 능력을 확장할 수 있으며, 다른 MCP 도구들과 결합하기 용이한 구조를 가지고 있습니다.",
     "status": "approved"
+  },
+  {
+    "repo": "Xenia101/KakaoTalk-python",
+    "url": "https://github.com/Xenia101/KakaoTalk-python",
+    "tool_name": "KakaoTalk-python",
+    "description": "Windows용 카카오톡 데스크톱 앱을 자동화하여 특정 채팅방을 탐색하고 메시지를 자동으로 전송하는 Python 도구",
+    "type": "skill",
+    "capabilities": [
+      "카카오톡 채팅방 찾기",
+      "자동 메시지 전송"
+    ],
+    "needed_packages": [
+      "pyautogui",
+      "pywinauto",
+      "pyperclip"
+    ],
+    "reasoning": "로컬 Windows 환경의 카카오톡 데스크톱 애플리케이션을 제어하여 메시지를 전송하는 기능을 제공하므로, 로컬 에이전트가 외부 커뮤니케이션 채널로 확장될 수 있는 유용한 기술(skill)임. Python 기반으로 구현되어 로컬 에이전트와의 통합이 용이함.",
+    "status": "pending_approval"
+  },
+  {
+    "repo": "Damnun/Python_Send_KakaoTalk_Message",
+    "url": "https://github.com/Damnun/Python_Send_KakaoTalk_Message",
+    "tool_name": "Python_Send_Kakao_Talk_Message",
+    "description": "카카오톡 메시지 전송 API를 활용하여 특정 사용자에게 메시지를 전달하는 Python 스크립트",
+    "type": "skill",
+    "capabilities": [
+      "카카오톡 메시지 발송",
+      "사용자 대상 알림 전송"
+    ],
+    "needed_packages": [
+      "requests"
+    ],
+    "reasoning": "Python 기반의 도구로 로컬에서 실행 가능하며, 에이전트가 사용자에게 알림이나 요약 정보를 전달하는 커뮤니케이션 스킬로 활용될 수 있음. 다만, Kakao API 인증 및 주기적인 키 갱신 로직이 에이전트의 워크플로우에 포함되어야 함.",
+    "status": "pending_approval"
+  },
+  {
+    "repo": "keonoh00/naver-cafe-scraper",
+    "url": "https://github.com/keonoh00/naver-cafe-scraper",
+    "tool_name": "naver-cafe-scraper",
+    "description": "사용자 인증을 통해 네이버 카페의 게시글 내용을 스크래핑하고 스크린샷을 생성하여 저장하는 Python 기반 스크래핑 도구입니다.",
+    "type": "skill",
+    "capabilities": [
+      "Naver Cafe 데이터 추출",
+      "커뮤니티 게시글 자동 스크래핑",
+      "스크린샷 기반 결과 저장",
+      "자동 로그인 및 세션 관리"
+    ],
+    "needed_packages": [
+      "python-dotenv",
+      "selenium (추정)",
+      "webdriver-manager (추정)"
+    ],
+    "reasoning": "로컬 Python 환경에서 독립적으로 실행 가능하며, 에이전트에게 네이버 카페라는 특정 도메인의 데이터를 수집하고 모니터링할 수 있는 구체적인 스킬을 제공합니다. 환경 변수(.env)를 통한 설정이 가능하여 에이전트의 설정 관리와 연동하기 용이합니다.",
+    "status": "pending_approval"
+  },
+  {
+    "repo": "an-in-seek/naver_cafe_scraper",
+    "url": "https://github.com/an-in-seek/naver_cafe_scraper",
+    "tool_name": "Naver Cafe Scraper",
+    "description": "Playwright를 이용한 네이버 카페 게시글 크롤링 및 Tesseract OCR 기반 이미지 내 텍스트 추출 도구",
+    "type": "skill",
+    "capabilities": [
+      "네이버 카페 게시글 목록 수집",
+      "게시글 상세 본문 및 링크 추출",
+      "본문 내 이미지 텍스트 OCR(한/영) 처리",
+      "크롤링 데이터 CSV/JSON 저장"
+    ],
+    "needed_packages": [
+      "playwright",
+      "pandas",
+      "pytesseract",
+      "Pillow"
+    ],
+    "reasoning": "로컬 환경에서 Playwright와 Tesseract OCR을 통해 실행 가능하며, 네이버 카페라는 특정 플랫폼의 데이터를 구조화된 텍스트와 이미지 OCR 결과로 변환하여 에이전트의 정보 수집 및 분석 능력을 획기적으로 확장할 수 있는 유용한 스킬입니다.",
+    "status": "pending_approval"
+  },
+  {
+    "repo": "LydiaYoon/naver-cafe-crawler",
+    "url": "https://github.com/LydiaYoon/naver-cafe-crawler",
+    "tool_name": "Naver Cafe Crawler",
+    "description": "네이버 카페의 게시글 및 관련 데이터를 스크래핑할 수 있는 파이썬 크롤링 도구",
+    "type": "skill",
+    "capabilities": [
+      "네이버 카페 게시글 수집",
+      "커뮤니티 데이터 스크래핑",
+      "특정 키워드 기반 카페 정보 탐색"
+    ],
+    "needed_packages": [
+      "requests",
+      "beautifulsoup4",
+      "selenium"
+    ],
+    "reasoning": "네이버 카페의 데이터를 수집할 수 있는 파이썬 기반의 도구로, 로컬 에이전트가 특정 커뮤니티의 정보를 탐색하고 수집하는 '정보 수집(Information Retrieval)' 능력을 확장하는 데 유용함. 현재 개발 중(수정 중)이나 파이썬 기반이므로 로컬 환경에서 즉시 도구화 가능함.",
+    "status": "pending_approval"
   }
 ]

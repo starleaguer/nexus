@@ -27,16 +27,25 @@ class Config:
     PROJECT_ROOT = NexusConfig.PROJECT_ROOT
     MANIFEST_PATH = NexusConfig.MANIFEST_PATH
     
-    # 설정 로드
-    _MANIFEST = NexusConfig.load_manifest()
+    @property
+    def WORKER_MODEL(self):
+        return NexusConfig.get_model("worker")
     
-    WORKER_MODEL = NexusConfig.get_model("worker")
-    MANAGER_URL = NexusConfig.get_manager_url()
+    @property
+    def MANAGER_URL(self):
+        return NexusConfig.get_manager_url()
     
-    # 네트워크 설정
-    HOST = NexusConfig.get_path("worker.host", "0.0.0.0")
-    url = NexusConfig.get_worker_url()
-    PORT = int(url.split(":")[-1])
+    @property
+    def HOST(self):
+        return NexusConfig.get_path("worker.host", "0.0.0.0")
+    
+    @property
+    def PORT(self):
+        url = NexusConfig.get_worker_url()
+        return int(url.split(":")[-1])
+
+# 설정 인스턴스 생성
+config = Config()
 
 # 스킬 디렉토리
 SKILLS_DIR = Path(__file__).parent / "skills"
@@ -147,7 +156,7 @@ def summarize_with_ollama(raw_result: Dict[str, Any]) -> str:
 """
         
         response = ollama.chat(
-            model=Config.WORKER_MODEL,  # 중앙 설정 사용
+            model=config.WORKER_MODEL,  # 인스턴스 설정 사용
             messages=[{"role": "user", "content": prompt}]
         )
         
@@ -256,10 +265,8 @@ async def execute_task_raw(task: TaskRequest):
 
 if __name__ == "__main__":
     import uvicorn
-    manifest = load_manifest()
-    worker_config = manifest.get("worker", {})
     uvicorn.run(
         app,
-        host=Config.HOST,
-        port=Config.PORT
+        host=config.HOST,
+        port=config.PORT
     )

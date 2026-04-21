@@ -1,0 +1,220 @@
+"""
+Market Flow 분석 스킬 - yfinance를 활용한 S&P 500 섹터 수급 분석
+수정 사항: 
+1. 워커(Worker) 중단 방지를 위한 Timeout 세션 적용 (requests.Session 활용)
+2. 에러 원인 분석을 위한 에러 계층 구조(Custom Exception) 도입
+3. 에러 컨텍스트(Error Context) 상세화로 시스템 오케스트레이터의 디버깅 지원
+4. 개별 섹터 데이터 수집 실패 시의 격리(Isolation) 강화
+"""
+
+from typing import Dict, Any, List, Optional
+import json
+import logging
+import traceback
+from datetime import datetime
+import yfinance as yf
+import requests
+
+# 로깅 설정: 워커 에러 추적을 위해 상세 레벨 설정
+logging.basicConfig(
+    level=logging.INFO, 
+    format='%(asctime)s - %(name)s - %(levelname)s - [TraceID: %(process)d] - %(message)s'
+)
+logger = logging.getLogger("MarketFlowSkill")
+
+# --- Custom Exceptions for Error Analysis ---
+class MarketFlowSkillError(Exception):
+    """Base exception for MarketFlowSkill"""
+    def __init__(self, message: str, error_type: str, context: Optional[Dict] = None):
+        super().__init__(message)
+        self.error_type = error_type
+        self.context = context or {}
+
+class MarketFlowValidationError(MarketFlowSkillError):
+    """Gatekeeper 단계에서 발생하는 유효성 검사 에러"""
+    def __init__(self, message: str, context: Optional[Dict] = None):
+        super().__init__(message, "ValidationError", context)
+
+class MarketFlowDataFetchError(MarketFlowSkillError):
+    """외부 API(yfinance) 호출 및 데이터 파싱 에러"""
+    def __init__(self, message: str, context: Optional[Dict] = None):
+        super().__init__(message, "DataFetchError", context)
+
+# S&P 500 주요 11개 섹터 ETF 목록
+SECTOR_ETFS = {
+    "Technology": "XLK",
+    "Healthcare": "XLV",
+    "Financials": "XLF",
+    "Consumer Discretionary": "XLY",
+    "Communication Services": "XLC",
+    "Industrials": "XLI",
+    "Consumer Staples": "XLP",
+    "Energy": "XLE",
+    "Utilities": "XLU",
+    "Real Estate": "XLRE",
+    "Materials": "XLB"
+}
+
+class MarketFlowSkill:
+    """시장 흐름 분석 스킬"""
+    
+    name = "market_flow"
+    description = "S&P 500 섹터별 수급(거래대금) 분석"
+    version = "1.3.0"
+    
+    def __init__(self):
+        # 워커의 무한 대기(Hang)를 방지하기 위해 Timeout이 설정된 세션 사용
+        self.session = requests.Session()
+        self.timeout = 10  # 10초 타임아웃 설정
+        
+    def _gatekeeper(self, data: Dict[str, Any]) -> None:
+        """
+        파라미터 유효성 검사 (Gatekeeper)
+        """
+        if not isinstance(data, dict):
+            raise MarketFlowValidationError(
+                f"Input data must be a dictionary, but got {type(data).__name__}",
+                context={"input_type": type(data).__name__}
+            )
+        
+        if "query" not in data:
+            raise MarketFlowValidationError("Missing required parameter: 'query'")
+            
+        if not isinstance(data["query"], str) or len(data["query"].strip()) == 0:
+            raise MarketFlowValidationError(
+                "The 'query' parameter must be a non-empty string",
+                context={"query_value": data.get("query")}
+            )
+
+    def _fetch_single_sector(self, sector_name: str, ticker_symbol: str) -> Optional[Dict[str, Any]]:
+        """
+        개별 티커 데이터를 가져오는 격리된 메서드
+        워커 에러의 가장 큰 원인인 네트워크 지연 및 API 에러를 여기서 격리함
+        """
+        try:
+            ticker = yf.Ticker(ticker_symbol, session=self.session)
+            # period="1d" 조회 시 발생할 수 있는 네트워크 타임아웃 대응을 위해 내부적으로 처리
+            hist = ticker.history(period="1d")
+            
+            if hist.empty:
+                logger.warning(f"Empty data returned for {ticker_symbol}")
+                return None
+                
+            close_price = hist['Close'].iloc[0]
+            volume = hist['Volume'].iloc[0]
+            trading_value = close_price * volume
+            
+            return {
+                "sector": sector_name,
+                "ticker": ticker_symbol,
+                "trading_value": float(trading_value),
+                "close_price": float(close_price),
+                "volume": int(volume)
+            }
+        except Exception as e:
+            # 특정 티커 실패가 전체 루프를 파괴하지 않도록 로깅 후 None 반환
+            logger.error(f"Failed to fetch data for {ticker_symbol}: {str(e)}")
+            return None
+
+    def analyze(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        시장 분석 수행
+        """
+        result = {
+            "skill": self.name,
+            "version": self.version,
+            "timestamp": datetime.now().isoformat(),
+            "status": "success",
+            "analysis": None,
+            "error": None,
+            "error_context": None
+        }
+
+        try:
+            # 1. Gatekeeper
+            self._gatecap_check = self._gatekeeper(data)
+            
+            sector_volumes = []
+            error_count = 0
+            
+            # 2. 데이터 수집 프로세스
+            for sector_name, ticker_symbol in SECTOR_ETFS.items():
+                sector_data = self._fetch_single_sector(sector_name, ticker_symbol)
+                
+                if sector_data:
+                    sector_volumes.append(sector_data)
+                else:
+                    error_count += 1
+            
+            # 3. 결과 가공 및 상태 결정
+            if not sector_volumes:
+                result["status"] = "error"
+                result["error"] = {"type": "DataUnavailableError", "message": "모든 섹터의 데이터를 가져오는데 실패했습니다."}
+            elif error_count > 0:
+                result["status"] = "partial_success"
+                result["analysis"] = {
+                    "top_sectors": sorted(sector_volumes, key=lambda x: x["trading_value"], reverse=True),
+                    "summary": f"{error_count}개 섹터 데이터를 가져오지 못했으나, 가용 데이터로 분석을 완료했습니다."
+                }
+            else:
+                sector_volumes.sort(key=lambda x: x["trading_value"], reverse=True)
+                result["analysis"] = {
+                    "top_sectors": sector_volumes,
+                    "summary": f"가장 거래대금이 높은 섹터는 {sector_volumes[0]['sector']} ({sector_volumes[0]['ticker']}) 입니다."
+                }
+
+        except MarketFlowValidationError as ve:
+            logger.error(f"Validation Error: {str(ve)}")
+            result["status"] = "error"
+            result["error"] = {"type": ve.error_type, "message": str(ve)}
+            result["error_context"] = ve.context
+            
+        except Exception as e:
+            # 워커 수준의 치명적 에러(RuntimeError) 발생 시 상세 Traceback을 로그에 남김
+            error_trace = traceback.format_exc()
+            logger.critical(f"Unexpected Execution Error: {str(e)}\n{error_trace}")
+            result["status"] = "error"
+            result["error"] = {
+                "type": "RuntimeError", 
+                "message": "An internal error occurred during analysis."
+            }
+            result["error_context"] = {
+                "exception_type": type(e).__name__,
+                "detail": str(e)
+            }
+            
+        return result
+
+
+def run(input_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    스킬 실행 엔트리포인트 (Nexus Orchestrator 호출용)
+    최상위 레벨에서 모든 예외를 잡아내어 워커 프로세스가 비정상 종료(Crash)되지 않도록 보장함
+    """
+    try:
+        skill = MarketFlowSkill()
+        return skill.analyze(input_data)
+    except Exception as e:
+        # 이 블록은 클래스 내부에서 잡지 못한 아주 치명적인 에러(예: 메모리 부족 등)를 처리
+        logger.critical(f"Critical Worker Failure: {str(e)}", exc_info=True)
+        return {
+            "skill": "market_flow",
+            "status": "error",
+            "error": {
+                "type": "CriticalSystemError", 
+                "message": "The worker process encountered a fatal error."
+            },
+            "error_context": {"exception": str(e)}
+        }
+
+if __name__ == "__main__":
+    # 테스트 케이스 실행
+    
+    print("\n[Test 1] Valid Input")
+    print(json.dumps(run({"query": "Analyze market flow"}), indent=2, ensure_ascii=False))
+
+    print("\n[Test 2] Validation Error (Missing Query)")
+    print(json.dumps(run({"not_query": "test"}), indent=2, ensure_ascii=False))
+
+    print("\n[Test 3] Validation Error (Wrong Type)")
+    print(json.dumps(run(["not", "a", "dict"]), indent=2, ensure_ascii=False))

@@ -7,6 +7,10 @@ from datetime import datetime
 import os
 import json
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 try:
     from chromadb import Client as ChromaClient
     CHROMADB_AVAILABLE = True
@@ -70,7 +74,10 @@ class MemoryManager:
             # 투자 원칙 컬렉션
             self.principles_collection = self.chroma_client.get_or_create_collection("investment_principles")
             # 사용자 성향 컬렉션
-            self.user_profile_collection = self.chroma_client.get_or_create_collection("user_profile")
+            self.user_profile_collection = self.chroma_client.get_or_create_collection(name="user_profiles")
+            self.learnings_collection = self.chroma_client.get_or_create_collection(name="agent_learnings")
+            self.autonomous_logs_collection = self.chroma_client.get_or_create_collection(name="autonomous_logs")
+            self.knowledge_notes_collection = self.chroma_client.get_or_create_collection(name="knowledge_notes")
         else:
             self.chroma_client = None
             self.principles_collection = None
@@ -425,6 +432,141 @@ class MemoryManager:
             return []
         except Exception as e:
             print(f"Error searching profiles: {e}")
+            return []
+
+    # ==================== Evolving Agent: Learnings ====================
+    def save_learning(self, content: str, category: str = "general"):
+        """에이전트가 학습한 내용 저장"""
+        if not CHROMADB_AVAILABLE or not hasattr(self, 'learnings_collection'): return
+        
+        learning_id = f"learn_{datetime.now().timestamp()}"
+        self.learnings_collection.add(
+            ids=[learning_id],
+            documents=[content],
+            metadatas=[{"category": category, "timestamp": datetime.now().isoformat()}]
+        )
+
+    def get_all_learnings(self, limit: int = 20) -> List[Dict[str, Any]]:
+        """모든 학습 로그 조회 (최신순)"""
+        if not CHROMADB_AVAILABLE or not hasattr(self, 'learnings_collection'): return []
+        
+        try:
+            result = self.learnings_collection.get()
+            learnings = []
+            if result and result.get("ids"):
+                for i in range(len(result["ids"])):
+                    # 메타데이터가 없는 경우를 대비한 방어적 코딩
+                    meta = result["metadatas"][i] if result["metadatas"] and i < len(result["metadatas"]) else {}
+                    learnings.append({
+                        "id": result["ids"][i],
+                        "content": result["documents"][i],
+                        "category": meta.get("category", "general"),
+                        "timestamp": meta.get("timestamp", datetime.now().isoformat())
+                    })
+                # 시간 역순 정렬
+                return sorted(learnings, key=lambda x: x["timestamp"], reverse=True)
+            return []
+        except Exception as e:
+            print(f"Error getting learnings: {e}")
+            return []
+
+    # ==================== Knowledge Notes ====================
+    def save_knowledge_note(self, content: str, source_url: str = "", user_comment: str = "", category: str = "youtube"):
+        """유튜브 등 외부 지식 노트 저장"""
+        if not CHROMADB_AVAILABLE or not hasattr(self, 'knowledge_notes_collection'): return
+        
+        note_id = f"note_{datetime.now().timestamp()}"
+        # 사용자 코멘트가 있으면 여기에 포함해 저장
+        full_content = content
+        if user_comment:
+            full_content = f"[AI 노트] {user_comment}\n\n[원문 요약] {content}"
+        
+        self.knowledge_notes_collection.add(
+            ids=[note_id],
+            documents=[full_content],
+            metadatas=[{
+                "category": category,
+                "source_url": source_url,
+                "user_comment": user_comment,
+                "timestamp": datetime.now().isoformat()
+            }]
+        )
+        
+        # Intelligence 탭의 Learning Log에도 기록 (포제적 학습)
+        emoji = "🎥" if category == "youtube" else "📝"
+        self.save_learning(
+            content=f"{emoji} [{category.upper()}] {user_comment or content[:100]}",
+            category=category
+        )
+
+    def get_knowledge_notes(self, limit: int = 20, category: str = None) -> list:
+        """저장된 지식 노트 조회"""
+        if not CHROMADB_AVAILABLE or not hasattr(self, 'knowledge_notes_collection'): return []
+        
+        try:
+            result = self.knowledge_notes_collection.get()
+            notes = []
+            if result and result.get("ids"):
+                for i in range(len(result["ids"])):
+                    meta = result["metadatas"][i] if result["metadatas"] and i < len(result["metadatas"]) else {}
+                    if category and meta.get("category") != category:
+                        continue
+                    notes.append({
+                        "id": result["ids"][i],
+                        "content": result["documents"][i],
+                        "category": meta.get("category", "general"),
+                        "source_url": meta.get("source_url", ""),
+                        "user_comment": meta.get("user_comment", ""),
+                        "timestamp": meta.get("timestamp", datetime.now().isoformat())
+                    })
+            return sorted(notes, key=lambda x: x["timestamp"], reverse=True)[:limit]
+        except Exception as e:
+            print(f"Error getting knowledge notes: {e}")
+            return []
+
+    # ==================== Autonomous Logs ====================
+    def save_autonomous_log(self, content: str):
+        """자율 루프 리포트 저장"""
+        if not CHROMADB_AVAILABLE or not hasattr(self, 'autonomous_logs_collection'): return
+        
+        log_id = f"auto_{datetime.now().timestamp()}"
+        logger.info(f"[MemoryManager] 자율 로그 저장 시작: {log_id} (길이: {len(content)})")
+        self.autonomous_logs_collection.add(
+            ids=[log_id],
+            documents=[content],
+            metadatas=[{"timestamp": datetime.now().isoformat()}]
+        )
+        logger.info(f"[MemoryManager] 자율 로그 저장 완료: {log_id}")
+
+    def get_autonomous_logs(self, limit: int = 20) -> List[Dict[str, Any]]:
+        """모든 자율 리포트 조회 (최신순)"""
+        if not CHROMADB_AVAILABLE or not hasattr(self, 'autonomous_logs_collection'): return []
+        
+        try:
+            # 명시적으로 documents와 metadatas를 포함하도록 요청
+            result = self.autonomous_logs_collection.get(include=["documents", "metadatas"])
+            logs = []
+            
+            if not result or not result.get("ids"):
+                logger.info("[MemoryManager] 자율 로그가 비어있음.")
+                return []
+                
+            logger.info(f"[MemoryManager] 자율 로그 {len(result['ids'])}건 조회됨.")
+            
+            for i in range(len(result["ids"])):
+                # 메타데이터 방어적 처리
+                meta = result["metadatas"][i] if result["metadatas"] and i < len(result["metadatas"]) else {}
+                logs.append({
+                    "id": result["ids"][i],
+                    "content": result["documents"][i],
+                    "timestamp": meta.get("timestamp", datetime.now().isoformat())
+                })
+            
+            # 시간순 정렬 및 리미트 적용
+            sorted_logs = sorted(logs, key=lambda x: x["timestamp"], reverse=True)[:limit]
+            return sorted_logs
+        except Exception as e:
+            logger.error(f"[MemoryManager] 자율 로그 조회 중 오류: {e}")
             return []
 
 
