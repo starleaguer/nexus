@@ -145,8 +145,7 @@ JSON 응답 형식:
     "params": {{"query": "도구 파라미터"}},
     "is_finished": true_또는_false,
     "thought": "왜 이 조사가 더 필요한지 설명"
-}}"""
-        
+}}
 
 적용 가능한 원칙:
 {principles_text}
@@ -403,7 +402,7 @@ class ManagerCore:
             research_history = state.get("research_history", [])
             
             # LLM으로 최종 리포트 생성 (히스토리 전체 반영)
-            final_report = self.llm.finalize_report(research_history, principles, user_input, user_profile)
+            final_report = self.llm.finalize_report(worker_result, principles, user_input, user_profile)
             state["final_report"] = final_report
             
             # 작업 로그 저장
