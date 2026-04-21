@@ -292,6 +292,42 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    document.getElementById('save-models-btn').addEventListener('click', async () => {
+        const managerModel = document.getElementById('manager-model-select').value;
+        const workerModel = document.getElementById('worker-model-select').value;
+        
+        console.log(`Saving models: manager=${managerModel}, worker=${workerModel}`);
+        
+        try {
+            showNotification('모델 설정 저장 중...');
+            // Manager 모델 업데이트
+            const res1 = await fetch('/api/config/model', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ component: 'manager', model: managerModel })
+            });
+            const data1 = await res1.json();
+            console.log('Manager update response:', data1);
+
+            // Worker 모델 업데이트
+            const res2 = await fetch('/api/config/model', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ component: 'worker', model: workerModel })
+            });
+            const data2 = await res2.json();
+            console.log('Worker update response:', data2);
+
+            showNotification('모델 설정이 성공적으로 저장되었습니다!');
+            
+            // 저장 후 정보 다시 로드 (상태 동기화)
+            setTimeout(loadActiveTools, 500);
+        } catch (err) {
+            console.error('Save failed:', err);
+            showNotification('모델 저장 실패: ' + err.message);
+        }
+    });
+
     document.getElementById('save-timeout-btn').addEventListener('click', async () => {
         const workerT = parseInt(document.getElementById('worker-timeout-input').value);
         const ollamaT = parseInt(document.getElementById('ollama-timeout-input').value);

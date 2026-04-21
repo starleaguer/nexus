@@ -59,9 +59,14 @@ class AgentState(dict):
     selected_tool: Optional[str]
     tool_params: Optional[Dict[str, Any]]
     
-    # 워커 결과
+    # 워커 결과 및 히스토리
     worker_result: Optional[Dict[str, Any]]
     worker_summary: Optional[str]
+    research_history: List[Dict[str, Any]] # 추가: 여러 도구 실행 결과 저장
+    
+    # 제어 플래그
+    is_finished: bool # 추가: 분석 완료 여부
+    iteration_count: int # 추가: 무한 루프 방지
     
     # 적용된 원칙
     applied_principles: List[Dict[str, Any]]
@@ -101,41 +106,47 @@ class OllamaClient:
             logger.error(f"Ollama 오류: {e}")
             return f"AI 분석 중 오류가 발생했습니다: {str(e)[:100]}"
     
-    def analyze_intent(self, user_input: str, principles: List[Dict[str, Any]], user_profile: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """의도 분석"""
-        principles_text = "\n".join([
-            f"- {p.get('content', '')}" 
-            for p in principles
-        ]) if principles else "적용된 원칙 없음"
+    def analyze_intent(self, user_input: str, principles: List[Dict[str, Any]], 
+                       user_profile: Optional[Dict[str, Any]] = None,
+                       research_history: List[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """의도 분석 (연구 히스토리 반영)"""
+        principles_text = "\n".join([f"- {p.get('content', '')}" for p in principles]) if principles else "없음"
         
-        skills = _CONFIG.get("tools", {}).get("skills", [])
-        mcp_tools = _CONFIG.get("tools", {}).get("mcp", [])
-        tools = skills + mcp_tools
+        # 도구 목록 구성
+        skills = NexusConfig.load_manifest().get("tools", {}).get("skills", [])
+        mcp_tools = NexusConfig.load_manifest().get("tools", {}).get("mcp", [])
+        tools_text = "\n".join([f"- {t.get('name')}: {t.get('description')}" for t in skills + mcp_tools])
         
-        tools_text = "\n".join([
-            f"- {t.get('name')}: {t.get('description')} (capabilities: {', '.join(t.get('capabilities', []))})" 
-            for t in tools
-        ]) if tools else "사용 가능한 도구 없음"
+        # 연구 히스토리 요약
+        history_text = "\n".join([
+            f"[{h['tool']} 결과]: {h['summary'][:300]}..." 
+            for h in (research_history or [])
+        ]) if research_history else "없음 (연구 시작 단계)"
+
+        profile_text = f"\n[사용자 성향]\n{user_profile['profile']}" if user_profile and user_profile.get("profile") else ""
         
-        profile_text = ""
-        if user_profile and user_profile.get("profile"):
-            profile_text = f"\n[사용자 성향/피드백]\n{user_profile['profile']}\n이 성향을 최우선으로 반영하여 도구를 선택해줘."
-        
-        system = f"""너는 다목적 AI 매니저 및 시스템 아키텍트야. 
-사용자의 질문에서 의도(투자 분석, 시스템 설정, 코드 수정, 도구 추가 등)를 분석하고 아래 제공된 도구 중에서 가장 적절한 도구를 선택해줘.
-반드시 제공된 도구의 'name' 중 하나를 선택해야 해.{profile_text}
+        system = f"""너는 고도로 숙련된 AI 리서치 매니저야. 사용자의 질문을 해결하기 위해 필요한 정보를 단계별로 수집해.
+
+[수집 가이드라인]
+1. **입체적 분석**: 주식/시장 분석 시 반드시 시세(`kospi_kosdaq_stock_server`), 여론(`reddit_mcp_buddy`), 최신 뉴스(`mcp_chrome`) 등 다양한 도구를 조합해.
+2. **반복 연구**: 현재까지 수집된 정보가 부족하다면 "is_finished": false로 설정하고 다른 도구를 추가 선택해.
+3. **종료 조건**: 충분한 정보가 모였거나 더 이상 새로운 인사이트가 없다면 "is_finished": true로 설정해.
 
 [사용 가능한 도구]
 {tools_text}
 
-응답은 JSON 형태로 반환해:
+[지금까지 조사된 내용]
+{history_text}{profile_text}
+
+JSON 응답 형식:
 {{
-    "intent": "분석된 의도",
-    "required_tool": "선택한 도구 이름",
-    "params": {{"query": "값"}}
+    "intent": "현재 분석 상황",
+    "required_tool": "다음에 호출할 도구 이름 (없으면 null)",
+    "params": {{"query": "도구 파라미터"}},
+    "is_finished": true_또는_false,
+    "thought": "왜 이 조사가 더 필요한지 설명"
 }}"""
         
-        user = f"""사용자 질문: {user_input}
 
 적용 가능한 원칙:
 {principles_text}
@@ -219,7 +230,7 @@ class ManagerCore:
         return self.config.WORKER_URL
     
     def _build_graph(self) -> StateGraph:
-        """LangGraph 빌드"""
+        """LangGraph 빌드 (반복적 연구 루프 포함)"""
         graph = StateGraph(AgentState)
         
         # 노드 추가
@@ -227,13 +238,33 @@ class ManagerCore:
         graph.add_node("call_worker", self.call_worker_node)
         graph.add_node("finalize_report", self.finalize_report_node)
         
-        # 엣지 추가
+        # 엣지 추가 (조건부 루프)
         graph.set_entry_point("analyze_intent")
-        graph.add_edge("analyze_intent", "call_worker")
-        graph.add_edge("call_worker", "finalize_report")
+        
+        # analyze_intent 이후: 완료되었으면 리포트로, 아니면 워커 호출로
+        graph.add_conditional_edges(
+            "analyze_intent",
+            self._should_continue_research,
+            {
+                "continue": "call_worker",
+                "finish": "finalize_report"
+            }
+        )
+        
+        # call_worker 이후: 다시 analyze_intent로 돌아가서 추가 작업 판단
+        graph.add_edge("call_worker", "analyze_intent")
+        
         graph.add_edge("finalize_report", END)
         
         return graph.compile()
+
+    def _should_continue_research(self, state: AgentState) -> str:
+        """연구를 계속할지 판단하는 라우터"""
+        if state.get("is_finished") or state.get("iteration_count", 0) >= 3:
+            return "finish"
+        if state.get("selected_tool"):
+            return "continue"
+        return "finish"
     
     # ==================== 노드 구현 (방어적) ====================
     async def analyze_intent_node(self, state: AgentState) -> AgentState:
@@ -242,34 +273,32 @@ class ManagerCore:
         """
         user_input = state.get("user_input", "")
         user_id = state.get("user_id", "default")
+        research_history = state.get("research_history", [])
+        iteration_count = state.get("iteration_count", 0)
+        
+        state["iteration_count"] = iteration_count + 1
         
         try:
-            # 1. 관련 원칙 검색 (RAG) 및 사용자 성향 조회
-            principles = self.memory.get_relevant_principles(
-                query=user_input,
-                n_results=5
-            )
-            
-            # [First Principles] 시스템 제1원리 강제 적용
-            first_principle = {
-                "id": "core_001",
-                "content": "모든 현상을 이원성의 균형 속에서 파악하고, 본질적인 구조와 흐름을 먼저 분석하라",
-                "category": "core"
-            }
-            # 중복 방지하며 맨 앞에 추가
-            if not any(p.get("content") == first_principle["content"] for p in principles):
-                principles.insert(0, first_principle)
-                
+            # 1. 관련 원칙 및 사용자 성향 조회
+            principles = self.memory.get_relevant_principles(query=user_input, n_results=5)
             user_profile = self.memory.get_user_profile(user_id)
             
-            # 2. LLM으로 의도 분석
-            analysis = self.llm.analyze_intent(user_input, principles, user_profile)
+            # [First Principles] 시스템 제1원리 강제 적용
+            first_principle = {"content": "모든 현상을 이원성의 균형 속에서 파악하고, 본질적인 구조와 흐름을 먼저 분석하라"}
+            if not any(p.get("content") == first_principle["content"] for p in principles):
+                principles.insert(0, first_principle)
             
-            state["selected_tool"] = analysis.get("required_tool", "market_flow")
-            state["tool_params"] = analysis.get("params", {"query": user_input})
             state["applied_principles"] = principles
             
-            logger.info(f"[analyze_intent] 도구: {state['selected_tool']}, 원칙: {len(principles)}개 적용")
+            # 2. LLM 의도 분석 (히스토리 포함)
+            result = self.llm.analyze_intent(user_input, principles, user_profile, research_history)
+            
+            state["selected_tool"] = result.get("required_tool")
+            state["tool_params"] = result.get("params", {})
+            state["is_finished"] = result.get("is_finished", False)
+            
+            if state["selected_tool"]:
+                logger.info(f"[{state['iteration_count']}/3] 도구 선택: {state['selected_tool']}, 생각: {result.get('thought')}")
             
         except Exception as e:
             logger.error(f"의도 분석 오류: {e}")
@@ -311,9 +340,24 @@ class ManagerCore:
                     ) as resp:
                         if resp.status == 200:
                             result = await resp.json()
-                            state["worker_result"] = result.get("raw_result")
-                            state["worker_summary"] = result.get("summary")
-                            logger.info(f"[call_worker] 성공 (시도 {attempt + 1})")
+                            raw_result = result.get("raw_result")
+                            summary = result.get("summary", "요약 없음")
+                            
+                            state["worker_result"] = raw_result
+                            state["worker_summary"] = summary
+                            
+                            # 히스토리에 추가
+                            if "research_history" not in state:
+                                state["research_history"] = []
+                            
+                            state["research_history"].append({
+                                "tool": tool_name,
+                                "params": params,
+                                "result": raw_result,
+                                "summary": summary
+                            })
+                            
+                            logger.info(f"[call_worker] {tool_name} 성공 (시도 {attempt + 1})")
                             return state
                         elif resp.status == 404:
                             state["error"] = f"도구를 찾을 수 없음: {tool_name}"
@@ -356,9 +400,10 @@ class ManagerCore:
         try:
             # 사용자 성향 조회
             user_profile = self.memory.get_user_profile(user_id)
+            research_history = state.get("research_history", [])
             
-            # LLM으로 최종 리포트 생성
-            final_report = self.llm.finalize_report(worker_result, principles, user_input, user_profile)
+            # LLM으로 최종 리포트 생성 (히스토리 전체 반영)
+            final_report = self.llm.finalize_report(research_history, principles, user_input, user_profile)
             state["final_report"] = final_report
             
             # 작업 로그 저장

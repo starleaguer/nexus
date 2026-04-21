@@ -142,6 +142,7 @@ async def update_model_config(req: ModelConfigRequest):
         with open(NexusConfig.MANIFEST_PATH, "w", encoding="utf-8") as f:
             json.dump(manifest, f, indent=2, ensure_ascii=False)
         
+        logger.info(f"✅ 매니페스트 업데이트 완료: {req.component} -> {req.model}")
         NexusConfig._manifest = None
         
         if req.component == "manager":
