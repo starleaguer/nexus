@@ -39,6 +39,17 @@
           "whisper_voice_to_text",
           "metadata_extraction"
         ]
+      },
+      {
+        "name": "web_researcher",
+        "description": "인터넷 웹사이트 검색 및 문서 본문 수집, 최신 뉴스 자료 수집 전문 스킬",
+        "entry": "worker/skills/web_researcher.py",
+        "capabilities": [
+          "web_search",
+          "content_extraction",
+          "news_collection",
+          "market_research"
+        ]
       }
     ],
     "mcp": [

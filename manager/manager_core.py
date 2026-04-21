@@ -128,9 +128,9 @@ class OllamaClient:
         system = f"""너는 고도로 숙련된 AI 리서치 매니저야. 사용자의 질문을 해결하기 위해 필요한 정보를 단계별로 수집해.
 
 [수집 가이드라인]
-1. **입체적 분석**: 주식/시장 분석 시 반드시 시세(`kospi_kosdaq_stock_server`), 여론(`reddit_mcp_buddy`), 최신 뉴스(`mcp_chrome`) 등 다양한 도구를 조합해.
-2. **반복 연구**: 현재까지 수집된 정보가 부족하다면 "is_finished": false로 설정하고 다른 도구를 추가 선택해.
-3. **종료 조건**: 충분한 정보가 모였거나 더 이상 새로운 인사이트가 없다면 "is_finished": true로 설정해.
+1. **입체적 분석**: 주식/시장 분석 시 반드시 시세(`kospi_kosdaq_stock_server`), 여론(`reddit_mcp_buddy`), 최신 뉴스 및 웹 자료(`web_researcher`) 등 다양한 도구를 조합해. 특히 최신 트렌드 파악을 위해 `web_researcher`를 적극 활용해.
+2. **반복 연구**: 수집된 정보가 단편적이라면 "is_finished": false로 설정하고, `web_researcher`를 통해 다른 키워드로 추가 검색을 수행해. 최소 2~3개 이상의 검색 결과와 뉴스 본문을 확보하는 것을 목표로 해.
+3. **종료 조건**: 사용자의 질문에 대해 충분한 근거 데이터(수치, 뉴스, 여론 등)가 수집되었을 때만 "is_finished": true로 설정해.
 
 [사용 가능한 도구]
 {tools_text}
@@ -142,9 +142,9 @@ JSON 응답 형식:
 {{
     "intent": "현재 분석 상황",
     "required_tool": "다음에 호출할 도구 이름 (없으면 null)",
-    "params": {{"query": "도구 파라미터"}},
+    "params": {{"query": "구체적인 검색어 또는 파라미터"}},
     "is_finished": true_또는_false,
-    "thought": "왜 이 조사가 더 필요한지 설명"
+    "thought": "어떤 추가 자료가 더 필요한지, web_researcher를 통해 어떤 키워드를 더 검색할지 상세히 설명"
 }}
 
 적용 가능한 원칙:
@@ -263,7 +263,7 @@ class ManagerCore:
 
     def _should_continue_research(self, state: AgentState) -> str:
         """연구를 계속할지 판단하는 라우터"""
-        if state.get("is_finished") or state.get("iteration_count", 0) >= 3:
+        if state.get("is_finished") or state.get("iteration_count", 0) >= 5:
             return "finish"
         if state.get("selected_tool"):
             return "continue"
@@ -301,7 +301,7 @@ class ManagerCore:
             state["is_finished"] = result.get("is_finished", False)
             
             if state["selected_tool"]:
-                logger.info(f"[{state['iteration_count']}/3] 도구 선택: {state['selected_tool']}, 생각: {result.get('thought')}")
+                logger.info(f"[{state['iteration_count']}/5] 도구 선택: {state['selected_tool']}, 생각: {result.get('thought')}")
             
         except Exception as e:
             logger.error(f"의도 분석 오류: {e}")

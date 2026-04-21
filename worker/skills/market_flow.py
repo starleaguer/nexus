@@ -82,8 +82,7 @@ class MarketFlowSkill:
     version = "1.4.0"
     
     def __init__(self):
-        self.session = requests.Session()
-        self    .timeout = 10  # 10초 타임아웃 설정
+        self.timeout = 10  # 10초 타임아웃 설정
         
     def _gatekeeper(self, data: Dict[str, Any]) -> None:
         """파라미터 유효성 검사"""
@@ -109,7 +108,7 @@ class MarketFlowSkill:
         """
         start_time = time.perf_counter()
         try:
-            ticker = yf.Ticker(ticker_symbol, session=self.session)
+            ticker = yf.Ticker(ticker_symbol)
             # yfinance 내부적으로 발생하는 네트워크 지연을 모니터링하기 위해 period 설정
             hist = ticker.history(period="1d")
             

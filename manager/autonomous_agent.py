@@ -37,8 +37,6 @@ class AutonomousAgent:
                 
                 logger.info(f"[Autonomous] 다음 정기 모니터링까지 대기합니다. ({interval}초 후 실행)")
                 await asyncio.sleep(interval)
-                
-                if not self.is_running: break
 
                 sys_prompt = "정기 시장 자금 흐름 모니터링: 현재 주요 자산군(주식, 암호화폐, 채권 등)의 자금 흐름을 분석하고, 이전과 비교하여 구조적 변화나 특이사항이 있는지 심층 보고해."
                 logger.info("[Autonomous] 정기 모니터링 시작...")
@@ -48,6 +46,8 @@ class AutonomousAgent:
                 
                 if result and result.get("final_report"):
                     logger.info("[Autonomous] 정기 모니터링 리포트 생성 및 저장 완료.")
+                
+                if not self.is_running: break
                 
             except asyncio.CancelledError:
                 break
