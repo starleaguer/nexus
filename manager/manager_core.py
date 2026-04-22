@@ -105,6 +105,12 @@ class OllamaClient:
         except Exception as e:
             logger.error(f"Ollama 오류: {e}")
             return f"AI 분석 중 오류가 발생했습니다: {str(e)[:100]}"
+
+    def summarize_result(self, raw_result: Dict[str, Any]) -> str:
+        """작업 결과를 요약"""
+        system = "너는 작업 실행 결과를 핵심만 요약하는 비서야."
+        user = f"다음 결과를 요약해줘:\n{json.dumps(raw_result, ensure_ascii=False, indent=2)}"
+        return self.chat(system, user)
     
     def analyze_intent(self, user_input: str, principles: List[Dict[str, Any]], 
                        user_profile: Optional[Dict[str, Any]] = None,
@@ -217,8 +223,9 @@ JSON 응답 형식:
 class ManagerCore:
     """메니저 코어 - LangGraph 기반 워크플로우"""
     
-    def __init__(self):
+    def __init__(self, local_mode: bool = False):
         self.config = Config() # 인스턴스 생성하여 다이나믹 설정 지원
+        self.local_mode = local_mode
         self.memory = MemoryManager()
         self.graph = self._build_graph()
 
@@ -314,14 +321,43 @@ class ManagerCore:
     
     async def call_worker_node(self, state: AgentState) -> AgentState:
         """
-        call_worker: RTX Worker API 호출 (재시도 로직 포함)
+        call_worker: RTX Worker API 호출 또는 로컬 직접 실행
         """
-        import aiohttp
-        
         tool_name = state.get("selected_tool", "market_flow")
         params = state.get("tool_params", {})
         task_id = f"task_{os.urandom(4).hex()}"
         
+        # --- Local Mode Execution ---
+        if self.local_mode:
+            logger.info(f"[LocalMode] {tool_name} 직접 실행 중...")
+            try:
+                raw_result = self._execute_locally(tool_name, params)
+                summary = "요약 생략 (Local Mode)"
+                
+                # 요약 요청 시 로컬 Ollama 사용
+                if state.get("summarize", True):
+                    summary = self.llm.summarize_result(raw_result)
+                
+                state["worker_result"] = raw_result
+                state["worker_summary"] = summary
+                
+                if "research_history" not in state:
+                    state["research_history"] = []
+                
+                state["research_history"].append({
+                    "tool": tool_name,
+                    "params": params,
+                    "result": raw_result,
+                    "summary": summary
+                })
+                return state
+            except Exception as e:
+                logger.error(f"[LocalMode] 실행 오류: {e}")
+                state["error"] = f"로컬 실행 실패: {str(e)}"
+                return state
+        # ----------------------------
+
+        import aiohttp
         last_error = None
         
         # 재시도 루프
@@ -390,6 +426,21 @@ class ManagerCore:
         logger.error(f"[call_worker] 최대 재시도 초과: {last_error}")
         
         return state
+
+    def _execute_locally(self, tool_name: str, params: Dict[str, Any]) -> Dict[str, Any]:
+        """로컬에서 스킬을 직접 로드하고 실행"""
+        import importlib
+        try:
+            module_name = f"worker.skills.{tool_name}"
+            module = importlib.import_module(module_name)
+            
+            if hasattr(module, "run"):
+                return module.run(params)
+            else:
+                raise AttributeError(f"Module {module_name} has no 'run' function")
+        except Exception as e:
+            logger.error(f"Local execution error for {tool_name}: {e}")
+            raise e
     
     async def finalize_report_node(self, state: AgentState) -> AgentState:
         """
