@@ -1081,6 +1081,23 @@ wheels = [
 ]
 
 [[package]]
+name = "finance-datareader"
+version = "0.9.110"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "beautifulsoup4" },
+    { name = "lxml" },
+    { name = "pandas" },
+    { name = "plotly" },
+    { name = "requests" },
+    { name = "requests-file" },
+    { name = "tqdm" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ef/78/620119a05df388b5b39c70cceb3410d72d1a20e5ecb8767adc1832453c32/finance_datareader-0.9.110-py3-none-any.whl", hash = "sha256:c98ef65e9bfd471e5ee8bb804cd3b115d0e9c7cf63e08b78077ed61c74fe8403", size = 51336, upload-time = "2026-03-11T11:42:11.602Z" },
+]
+
+[[package]]
 name = "finvizfinance"
 version = "1.3.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1194,6 +1211,19 @@ requests = [
 ]
 
 [[package]]
+name = "google-auth-oauthlib"
+version = "1.3.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "google-auth" },
+    { name = "requests-oauthlib" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a6/82/62482931dcbe5266a2680d0da17096f2aab983ecb320277d9556700ce00e/google_auth_oauthlib-1.3.1.tar.gz", hash = "sha256:14c22c7b3dd3d06dbe44264144409039465effdd1eef94f7ce3710e486cc4bfa", size = 21663, upload-time = "2026-03-30T22:49:56.408Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/2a/e0/cb454a95f460903e39f101e950038ec24a072ca69d0a294a6df625cc1627/google_auth_oauthlib-1.3.1-py3-none-any.whl", hash = "sha256:1a139ef23f1318756805b0e95f655c238bffd29655329a2978218248da4ee7f8", size = 19247, upload-time = "2026-03-30T20:02:23.894Z" },
+]
+
+[[package]]
 name = "google-genai"
 version = "1.73.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1272,6 +1302,19 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/9b/8d/9d4d27ed7f33d109c50d6b5ce578a9914aa68edab75d65869a17e630a8d1/grpcio-1.80.0-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:9a6284a5d907c37db53350645567c522be314bac859a64a7a5ca63b77bb7958f", size = 7830132, upload-time = "2026-03-30T08:47:33.254Z" },
     { url = "https://files.pythonhosted.org/packages/14/e4/9990b41c6d7a44e1e9dee8ac11d7a9802ba1378b40d77468a7761d1ad288/grpcio-1.80.0-cp312-cp312-win32.whl", hash = "sha256:c71309cfce2f22be26aa4a847357c502db6c621f1a49825ae98aa0907595b193", size = 4140904, upload-time = "2026-03-30T08:47:35.319Z" },
     { url = "https://files.pythonhosted.org/packages/2f/2c/296f6138caca1f4b92a31ace4ae1b87dab692fc16a7a3417af3bb3c805bf/grpcio-1.80.0-cp312-cp312-win_amd64.whl", hash = "sha256:9fe648599c0e37594c4809d81a9e77bd138cc82eb8baa71b6a86af65426723ff", size = 4880944, upload-time = "2026-03-30T08:47:37.831Z" },
+]
+
+[[package]]
+name = "gspread"
+version = "6.2.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "google-auth" },
+    { name = "google-auth-oauthlib" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/91/83/42d1d813822ed016d77aabadc99b09de3b5bd68532fd6bae23fd62347c41/gspread-6.2.1.tar.gz", hash = "sha256:2c7c99f7c32ebea6ec0d36f2d5cbe8a2be5e8f2a48bde87ad1ea203eff32bd03", size = 82590, upload-time = "2025-05-14T15:56:25.254Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/27/76/563fb20dedd0e12794d9a12cfe0198458cc0501fdc7b034eee2166d035d5/gspread-6.2.1-py3-none-any.whl", hash = "sha256:6d4ec9f1c23ae3c704a9219026dac01f2b328ac70b96f1495055d453c4c184db", size = 59977, upload-time = "2025-05-14T15:56:24.014Z" },
 ]
 
 [[package]]
@@ -2643,20 +2686,33 @@ dependencies = [
     { name = "aiofiles" },
     { name = "aiohttp" },
     { name = "apscheduler" },
+    { name = "beautifulsoup4" },
     { name = "borsa-mcp" },
     { name = "chromadb" },
     { name = "duckduckgo-search" },
     { name = "fastapi" },
+    { name = "fastmcp" },
+    { name = "finance-datareader" },
     { name = "google-genai" },
+    { name = "gspread" },
     { name = "jinja2" },
     { name = "kospi-kosdaq-stock-server" },
     { name = "langgraph" },
+    { name = "lxml" },
+    { name = "markdownify" },
+    { name = "matplotlib" },
     { name = "maverick-mcp" },
     { name = "mcp-server" },
+    { name = "numpy" },
     { name = "ollama" },
     { name = "openai-whisper" },
+    { name = "pandas" },
     { name = "protobuf" },
     { name = "pydantic" },
+    { name = "pykrx" },
+    { name = "pyyaml" },
+    { name = "scipy" },
+    { name = "tqdm" },
     { name = "tradingview-mcp-server" },
     { name = "uvicorn" },
     { name = "yfinance" },
@@ -2669,20 +2725,33 @@ requires-dist = [
     { name = "aiofiles", specifier = ">=25.1.0" },
     { name = "aiohttp", specifier = ">=3.13.5" },
     { name = "apscheduler", specifier = ">=3.11.2" },
+    { name = "beautifulsoup4" },
     { name = "borsa-mcp", editable = "temp_tools/borsa-mcp" },
     { name = "chromadb", specifier = ">=1.5.8" },
     { name = "duckduckgo-search", specifier = ">=8.1.1" },
     { name = "fastapi" },
+    { name = "fastmcp" },
+    { name = "finance-datareader" },
     { name = "google-genai", specifier = ">=1.0.0" },
+    { name = "gspread" },
     { name = "jinja2", specifier = ">=3.1.6" },
     { name = "kospi-kosdaq-stock-server", editable = "temp_tools/kospi-kosdaq-stock-server" },
     { name = "langgraph", specifier = ">=1.1.8" },
+    { name = "lxml" },
+    { name = "markdownify" },
+    { name = "matplotlib" },
     { name = "maverick-mcp", editable = "temp_tools/maverick-mcp" },
     { name = "mcp-server", editable = "temp_tools/financial-datasets-mcp" },
+    { name = "numpy" },
     { name = "ollama" },
     { name = "openai-whisper", specifier = ">=20250625" },
+    { name = "pandas" },
     { name = "protobuf", specifier = "<=3.20.3" },
     { name = "pydantic" },
+    { name = "pykrx" },
+    { name = "pyyaml" },
+    { name = "scipy" },
+    { name = "tqdm" },
     { name = "tradingview-mcp-server", editable = "temp_tools/tradingview-mcp" },
     { name = "uvicorn" },
     { name = "yfinance", specifier = ">=1.3.0" },
@@ -4021,6 +4090,18 @@ wheels = [
 ]
 
 [[package]]
+name = "requests-file"
+version = "3.0.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/3c/f8/5dc70102e4d337063452c82e1f0d95e39abfe67aa222ed8a5ddeb9df8de8/requests_file-3.0.1.tar.gz", hash = "sha256:f14243d7796c588f3521bd423c5dea2ee4cc730e54a3cac9574d78aca1272576", size = 6967, upload-time = "2025-10-20T18:56:42.279Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e1/d5/de8f089119205a09da657ed4784c584ede8381a0ce6821212a6d4ca47054/requests_file-3.0.1-py2.py3-none-any.whl", hash = "sha256:d0f5eb94353986d998f80ac63c7f146a307728be051d4d1cd390dbdb59c10fa2", size = 4514, upload-time = "2025-10-20T18:56:41.184Z" },
+]
+
+[[package]]
 name = "requests-oauthlib"
 version = "2.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -4633,9 +4714,6 @@ requires-dist = [
     { name = "tradingview-screener", specifier = ">=0.6.4" },
     { name = "tradingview-ta", specifier = ">=3.3.0" },
 ]
-
-[package.metadata.requires-dev]
-dev = []
 
 [[package]]
 name = "tradingview-screener"

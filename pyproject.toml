@@ -27,6 +27,19 @@ dependencies = [
     "openai-whisper>=20250625",
     "duckduckgo-search>=8.1.1",
     "google-genai>=1.0.0",
+    "finance-datareader",
+    "pandas",
+    "numpy",
+    "pyyaml",
+    "pykrx",
+    "scipy",
+    "matplotlib",
+    "beautifulsoup4",
+    "lxml",
+    "tqdm",
+    "gspread",
+    "markdownify",
+    "fastmcp",
 ]
 
 [tool.uv.workspace]
