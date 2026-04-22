@@ -10,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+import aiohttp
 
 # 로깅 설정
 logging.basicConfig(
@@ -23,7 +24,7 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 
 from manager.manager_core import ManagerCore
 from manager.researcher import ToolHunter
-from manager.autonomous_agent import AutonomousAgent
+# AutonomousAgent import removed (moved to worker)
 from shared.config_loader import NexusConfig
 import ollama
 
@@ -31,7 +32,7 @@ import ollama
 worker_process = None
 core = ManagerCore()
 hunter = ToolHunter()
-autonomous_agent = AutonomousAgent(core)
+# autonomous_agent moved to worker
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -51,13 +52,8 @@ async def lifespan(app: FastAPI):
             logger.info(f"✅ 로컬 워커 시작됨 (PID: {worker_process.pid})")
         except Exception as e:
             logger.error(f"❌ 로컬 워커 시작 실패: {e}")
-    # 자율 루프 시작
-    autonomous_agent.start()
-            
+    # NOTE: Autonomous agent moved to worker; server no longer starts it.
     yield
-    
-    # 자율 루프 종료
-    autonomous_agent.stop()
     
     # Shutdown: 서버 종료 시 워커도 함께 종료
     if worker_process:
@@ -121,22 +117,35 @@ class KnowledgeNoteRequest(BaseModel):
 
 @app.get("/api/models")
 async def get_models():
-    """Ollama에 설치된 모델 목록 반환"""
-    try:
-        models_info = ollama.list()
-        return [m.model for m in models_info.models]
-    except Exception as e:
-        logger.error(f"Failed to list models: {e}")
-        return ["gemma4:26b", "gemma4:e4b", "gemma4:31b"] # Fallback
+    """Proxy request to worker for Ollama model list"""
+    worker_url = NexusConfig.get_worker_url()
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session:
+        try:
+            async with session.get(f"{worker_url}/models") as resp:
+                if resp.status != 200:
+                    raise HTTPException(status_code=resp.status, detail="Worker models endpoint error")
+                data = await resp.json()
+                return data
+        except Exception as e:
+            logger.error(f"Failed to proxy models request: {e}")
+            raise HTTPException(status_code=500, detail="Unable to retrieve models from worker")
 
 @app.post("/api/config/model")
 async def update_model_config(req: ModelConfigRequest):
-    """시스템 모델 설정 업데이트"""
+    """시스템 모델 설정 업데이트 (proxy worker component)"""
     try:
+        # Proxy updates for worker component
+        if req.component == "worker":
+            worker_url = NexusConfig.get_worker_url()
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session:
+                async with session.post(f"{worker_url}/api/config/model", json=req.dict()) as resp:
+                    if resp.status != 200:
+                        raise HTTPException(status_code=resp.status, detail="Worker model update failed")
+                    return await resp.json()
+        # Server-side handling for other components
         manifest = NexusConfig.load_manifest()
         if "models" not in manifest:
             manifest["models"] = {}
-        
         manifest["models"][req.component] = req.model
         
         with open(NexusConfig.MANIFEST_PATH, "w", encoding="utf-8") as f:
@@ -153,15 +162,16 @@ async def update_model_config(req: ModelConfigRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/research")
+# Duplicate decorator removed
 async def run_research(req: ResearchRequest):
-    """맞춤형 도구 탐색 실행"""
-    try:
-        logger.info(f"Custom research requested: {req.query}")
-        asyncio.create_task(hunter.run_research_cycle([req.query]))
-        return {"status": "success", "message": f"'{req.query}' 분야의 도구를 탐색하기 시작했습니다. 잠시 후 후보 목록을 확인하세요."}
-    except Exception as e:
-        logger.error(f"Research error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    """Proxy research request to worker"""
+    worker_url = NexusConfig.get_worker_url()
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session:
+        payload = {"query": req.query}
+        async with session.post(f"{worker_url}/api/research", json=payload) as resp:
+            if resp.status != 200:
+                raise HTTPException(status_code=resp.status, detail="Worker research failed")
+            return await resp.json()
 
 @app.get("/api/learnings")
 async def get_learnings():
