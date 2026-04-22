@@ -13,10 +13,10 @@ document.addEventListener('DOMContentLoaded', () => {
         item.addEventListener('click', (e) => {
             e.preventDefault();
             const targetTab = item.getAttribute('data-tab');
-            
+
             navItems.forEach(i => i.classList.remove('active'));
             item.classList.add('active');
-            
+
             tabs.forEach(tab => {
                 tab.classList.remove('active');
                 if (tab.id === `${targetTab}-tab`) {
@@ -97,11 +97,11 @@ document.addEventListener('DOMContentLoaded', () => {
     async function loadLearnings() {
         const list = document.getElementById('learnings-list');
         list.innerHTML = '<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i><span>Loading learnings...</span></div>';
-        
+
         try {
             const response = await fetch('/api/learnings');
             const data = await response.json();
-            
+
             list.innerHTML = '';
             if (!data.learnings || data.learnings.length === 0) {
                 list.innerHTML = '<div class="loading-spinner">아직 학습된 내용이 없습니다. 대화를 시작해 보세요!</div>';
@@ -120,15 +120,15 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (err) {
             list.innerHTML = '<div class="loading-spinner">데이터 로드 실패</div>';
         }
-        
+
         // Load Autonomous Logs
         const autoList = document.getElementById('autonomous-logs-list');
         autoList.innerHTML = '<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i><span>Loading market insights...</span></div>';
-        
+
         try {
             const response = await fetch('/api/autonomous/logs');
             const data = await response.json();
-            
+
             autoList.innerHTML = '';
             if (!data.logs || data.logs.length === 0) {
                 autoList.innerHTML = '<div class="loading-spinner">아직 수집된 시장 동향 로그가 없습니다.</div>';
@@ -161,16 +161,16 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             researchBtn.disabled = true;
             researchBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> 탐색 중...';
-            
+
             const response = await fetch('/api/research', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ query: query })
             });
-            
+
             const result = await response.json();
             showNotification(result.message);
-            
+
             let attempts = 0;
             const interval = setInterval(async () => {
                 await loadCandidates();
@@ -240,7 +240,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     window.rejectTool = async (name) => {
         if (!confirm(`'${name}' 도구를 후보 목록에서 삭제하시겠습니까?`)) return;
-        
+
         try {
             const response = await fetch('/api/reject', {
                 method: 'POST',
@@ -261,13 +261,13 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const statusRes = await fetch('/api/status');
             const statusData = await statusRes.json();
-            const modelsRes = await fetch('/api/models');
+            const modelsRes = await fetch('/models');
             const models = await modelsRes.json();
-            
+
             const managerSelect = document.getElementById('manager-model-select');
             const workerSelect = document.getElementById('worker-model-select');
             managerSelect.innerHTML = ''; workerSelect.innerHTML = '';
-            
+
             models.forEach(model => {
                 managerSelect.innerHTML += `<option value="${model}" ${model === statusData.manager_model ? 'selected' : ''}>${model}</option>`;
                 workerSelect.innerHTML += `<option value="${model}" ${model === (statusData.worker_model || 'gemma4:e4b') ? 'selected' : ''}>${model}</option>`;
@@ -295,9 +295,9 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('save-models-btn').addEventListener('click', async () => {
         const managerModel = document.getElementById('manager-model-select').value;
         const workerModel = document.getElementById('worker-model-select').value;
-        
+
         console.log(`Saving models: manager=${managerModel}, worker=${workerModel}`);
-        
+
         try {
             showNotification('모델 설정 저장 중...');
             // Manager 모델 업데이트
@@ -319,7 +319,7 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log('Worker update response:', data2);
 
             showNotification('모델 설정이 성공적으로 저장되었습니다!');
-            
+
             // 저장 후 정보 다시 로드 (상태 동기화)
             setTimeout(loadActiveTools, 500);
         } catch (err) {
@@ -331,7 +331,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('save-timeout-btn').addEventListener('click', async () => {
         const workerT = parseInt(document.getElementById('worker-timeout-input').value);
         const ollamaT = parseInt(document.getElementById('ollama-timeout-input').value);
-        
+
         try {
             showNotification('타임아웃 설정 저장 중...');
             await fetch('/api/config/timeout', {
@@ -351,7 +351,7 @@ document.addEventListener('DOMContentLoaded', () => {
             showNotification('주기는 최소 60초 이상이어야 합니다.');
             return;
         }
-        
+
         try {
             showNotification('모니터링 주기 저장 중...');
             await fetch('/api/config/interval', {

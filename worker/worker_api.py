@@ -68,11 +68,18 @@ def discover_skills():
     project_root = str(Path(__file__).parent.parent)
     if project_root not in sys.path:
         sys.path.insert(0, project_root)
-    
+
+
+
     for py_file in SKILLS_DIR.glob("*.py"):
         if py_file.stem == "__init__":
             continue
         
+        # 비활성화: borsa_mcp 스킬은 로드하지 않음
+        if py_file.stem == "borsa_mcp":
+            # skip loading this skill to avoid ImportError
+            continue
+
         module_name = f"worker.skills.{py_file.stem}"
         try:
             # 모듈 동적 로드
@@ -211,6 +218,21 @@ async def list_skills():
         ]
     }
 
+
+@app.get("/models")
+async def list_models():
+    """
+    Ollama에 등록된 모델 리스트를 반환합니다.
+    Ollama가 로컬에 설치돼 있어야 합니다.
+    """
+    try:
+        # ollama.list() 는 현재 사용 가능한 모델 정보를 반환합니다.
+        models = ollama.list()
+        # 반환 형식: {"models": [{...}, {...}]}
+        return {"models": models}
+    except Exception as e:
+        logger.error(f"Ollama 모델 조회 실패: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve Ollama models")
 
 @app.post("/execute", response_model=TaskResponse)
 async def execute_task(task: TaskRequest):
