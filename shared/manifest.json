@@ -50,6 +50,18 @@
           "news_collection",
           "market_research"
         ]
+      },
+      {
+        "name": "trading_analyzer",
+        "description": "한국 주식 시세 조회, 재무 요약, 차트 분석 및 데이터베이스 관리 스킬",
+        "entry": "worker/skills/trading_analyzer.py",
+        "capabilities": [
+          "stock_search",
+          "price_lookup",
+          "financial_analysis",
+          "trend_analysis",
+          "db_management"
+        ]
       }
     ],
     "mcp": [
