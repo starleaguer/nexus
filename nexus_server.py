@@ -106,6 +106,7 @@ class ModelConfigRequest(BaseModel):
 
 class YouTubeSummarizeRequest(BaseModel):
     url: str
+    model_type: str = "local" # "local" or "gemini"
 
 class KnowledgeNoteRequest(BaseModel):
     content: str
@@ -113,10 +114,46 @@ class KnowledgeNoteRequest(BaseModel):
     user_comment: str = ""
     category: str = "youtube"
 
+class BulkDeleteRequest(BaseModel):
+    ids: List[str]
+
 # ==================== 엔드포인트 ====================
 
-@app.get("/api/models")
-async def get_models():
+@app.get("/api/models/manager")
+async def get_manager_models():
+    """Get Ollama model list from the local server (Manager)"""
+    try:
+        logger.info("🔍 Fetching local Ollama models for Manager...")
+        # ollama.list() returns the model information
+        resp = ollama.list()
+        
+        # 리스트 또는 객체 응답 처리
+        if hasattr(resp, 'models'):
+            models_data = resp.models
+        elif isinstance(resp, dict):
+            models_data = resp.get("models", [])
+        else:
+            models_data = resp # Fallback for unexpected formats
+            
+        model_names = []
+        for m in models_data:
+            if isinstance(m, dict):
+                model_names.append(m.get("model"))
+            elif hasattr(m, 'model'):
+                model_names.append(m.model)
+            else:
+                model_names.append(str(m))
+        
+        logger.info(f"✅ Found {len(model_names)} local models: {model_names}")
+        return model_names
+    except Exception as e:
+        logger.error(f"❌ Local Ollama models check failed: {e}")
+        # 기본값 제공 (Ollama가 꺼져있을 경우 등)
+        return ["gemma2:27b", "gemma2:9b", "gemma4:latest"]
+
+@app.get("/api/models/worker")
+@app.get("/api/models") # 하위 호환성을 위해 유지
+async def get_worker_models():
     """Proxy request to worker for Ollama model list"""
     worker_url = NexusConfig.get_worker_url()
     async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session:
@@ -127,7 +164,7 @@ async def get_models():
                 data = await resp.json()
                 return data
         except Exception as e:
-            logger.error(f"Failed to proxy models request: {e}")
+            logger.error(f"Failed to proxy worker models request: {e}")
             raise HTTPException(status_code=500, detail="Unable to retrieve models from worker")
 
 @app.post("/api/config/model")
@@ -182,20 +219,33 @@ async def get_learnings():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/api/learnings/delete-bulk")
+async def delete_learnings_bulk(req: BulkDeleteRequest):
+    """학습 로그 대량 삭제"""
+    try:
+        success = memory.delete_learnings(req.ids)
+        if success:
+            return {"status": "success", "message": f"{len(req.ids)}건의 학습 로그가 삭제되었습니다."}
+        else:
+            raise HTTPException(status_code=500, detail="삭제 중 오류가 발생했습니다.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/api/youtube/summarize")
 async def youtube_summarize(req: YouTubeSummarizeRequest):
-    """유튜브 URL 추출 후 Multi-Agent 기반 고도화 요약"""
+    """유튜브 URL 추출(Worker) 후 MacBook(Manager)에서 Multi-Agent 기반 고도화 요약"""
     try:
         import aiohttp
         from manager.manager_core import OllamaClient
         
-        # 1. Worker에게 youtube_summarizer 스킬 실행 요청 (Metadata + Transcript/Whisper)
+        # 1. Worker에게 youtube_summarizer 스킬 실행 요청 (Transcript/Metadata 추출만)
+        logger.info(f"📹 YouTube 요약 요청: {req.url} (Model: {req.model_type})")
         worker_url = NexusConfig.get_worker_url()
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=300)) as session:
             payload = {"tool_name": "youtube_summarizer", "params": {"url": req.url}}
             async with session.post(f"{worker_url}/execute", json=payload) as resp:
                 if resp.status != 200:
-                    raise HTTPException(status_code=resp.status, detail="Worker 오류")
+                    raise HTTPException(status_code=resp.status, detail="Worker가 응답하지 않습니다.")
                 worker_result = await resp.json()
 
         raw = worker_result.get("raw_result", {})
@@ -204,58 +254,69 @@ async def youtube_summarize(req: YouTubeSummarizeRequest):
 
         transcript = raw.get("transcript", "")
         if not transcript:
-            return {"status": "error", "message": "추출된 텍스트가 없습니다."}
+            return {"status": "error", "message": "텍스트를 추출할 수 없습니다. (자막이 없거나 처리 실패)"}
 
-        # 2. Multi-Agent 요약 파이프라인
-        llm = OllamaClient()
-        
+        # 2. MacBook(Manager)에서 요약 파이프라인 실행
         def chunk_text(text, size=4000):
             return [text[i:i+size] for i in range(0, len(text), size)]
             
         chunks = chunk_text(transcript)
         logger.info(f"YouTube transcript split into {len(chunks)} chunks.")
 
+        # 모델 선택 로직
+        if req.model_type == "gemini":
+            try:
+                import google.generativeai as genai
+                api_key = os.getenv("GOOGLE_API_KEY")
+                if not api_key:
+                    raise Exception("Gemini API 키가 설정되지 않았습니다. (.env의 GOOGLE_API_KEY 확인)")
+                genai.configure(api_key=api_key)
+                model = genai.GenerativeModel('gemini-1.5-flash')
+                
+                def chat_func(system, user):
+                    prompt = f"{system}\n\n[Context]\n{user}"
+                    response = model.generate_content(prompt)
+                    return response.text
+                logger.info("✨ Using Gemini for summarization")
+            except Exception as e:
+                logger.error(f"Gemini 초기화 실패: {e}. Local 모델로 전환합니다.")
+                llm = OllamaClient()
+                chat_func = llm.chat
+        else:
+            llm = OllamaClient()
+            chat_func = llm.chat
+            logger.info("🏠 Using Local model (Ollama) for summarization")
+
         # Agent 1: 핵심 팩트 추출
         extracted_facts = []
-        extractor_system = "너는 데이터 추출가야. 스크립트에서 시청자 인사나 잡담은 무시하고 핵심 주장과 정보만 추출해줘."
+        extractor_system = "너는 데이터 추출가야. 스크립트에서 핵심 주장과 정보만 추출해줘."
         
         for i, chunk in enumerate(chunks):
-            prompt = f"다음 스크립트에서 중요한 정보가 누락되지 않도록 명확하게 요약해 주세요:\n\n{chunk}"
-            fact = llm.chat(extractor_system, prompt)
+            prompt = f"다음 스크립트에서 중요한 정보가 누락되지 않도록 요약해 주세요:\n\n{chunk}"
+            fact = chat_func(extractor_system, prompt)
             extracted_facts.append(fact)
             
         combined_facts = "\n\n".join(extracted_facts)
 
         # Agent 2: 최종 구조화 요약 작성
-        writer_system = "당신은 전문 에디터입니다. 추출된 핵심 팩트들을 바탕으로 지식 베이스용으로 구조화하여 완벽하게 요약 정리하는 AI 어시스턴트입니다."
-        writer_prompt = f"""다음은 긴 영상 스크립트에서 추출된 핵심 팩트 데이터 모음입니다.
-이를 바탕으로, 반드시 **한국어**로, 그리고 아래의 일관된 마크다운 구조를 엄격하게 지켜서 요약해 주세요.
-
+        writer_system = "당신은 전문 에디터입니다. 지식 베이스용으로 구조화하여 마크다운 형식으로 요약해 주세요."
+        writer_prompt = f"""다음 팩트들을 바탕으로 한국어로 요약해 주세요.
 ---
 ### 📌 1. 핵심 요약 (Overview)
-- 영상의 주제와 가장 중요한 결론을 2~3문장 이내로 직관적으로 요약하세요.
-
 ### 🔑 2. 주요 포인트 (Key Points)
-- 영상의 핵심 내용 3~5가지를 글머리 기호(`-`)로 정리하세요.
-- 각 포인트의 제목은 **굵은 글씨**로 강조하고, 간단한 부연 설명을 덧붙이세요.
-
 ### 📜 3. 세부 내용 (Detailed Summary)
-- 논리적 흐름에 따라 전체 내용을 상세히 서술하세요. 중요한 키워드는 **굵게** 표시하세요.
-
 ### 💡 4. 인사이트 (Insights)
-- 이 영상에서 얻을 수 있는 교훈이나 실무 적용 방안을 작성하세요.
 ---
 [데이터]
 {combined_facts}"""
 
-        final_summary = llm.chat(writer_system, writer_prompt)
+        final_summary = chat_func(writer_system, writer_prompt)
         
         return {
             "status": "success",
             "video_id": raw.get("video_id"),
             "url": req.url,
             "metadata": raw.get("metadata"),
-            "method": raw.get("method"),
             "summary": final_summary
         }
     except Exception as e:
@@ -291,6 +352,18 @@ async def get_autonomous_logs():
     try:
         logs = memory.get_autonomous_logs()
         return {"status": "success", "logs": logs}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/autonomous/logs/delete-bulk")
+async def delete_autonomous_logs_bulk(req: BulkDeleteRequest):
+    """자율 로그 대량 삭제"""
+    try:
+        success = memory.delete_autonomous_logs(req.ids)
+        if success:
+            return {"status": "success", "message": f"{len(req.ids)}건의 자율 로그가 삭제되었습니다."}
+        else:
+            raise HTTPException(status_code=500, detail="삭제 중 오류가 발생했습니다.")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

@@ -470,6 +470,16 @@ class MemoryManager:
             print(f"Error getting learnings: {e}")
             return []
 
+    def delete_learnings(self, learning_ids: List[str]) -> bool:
+        """학습 로그 삭제 (벌크)"""
+        if not CHROMADB_AVAILABLE or not hasattr(self, 'learnings_collection'): return False
+        try:
+            self.learnings_collection.delete(ids=learning_ids)
+            return True
+        except Exception as e:
+            logger.error(f"Error deleting learnings: {e}")
+            return False
+
     # ==================== Knowledge Notes ====================
     def save_knowledge_note(self, content: str, source_url: str = "", user_comment: str = "", category: str = "youtube"):
         """유튜브 등 외부 지식 노트 저장"""
@@ -568,6 +578,16 @@ class MemoryManager:
         except Exception as e:
             logger.error(f"[MemoryManager] 자율 로그 조회 중 오류: {e}")
             return []
+
+    def delete_autonomous_logs(self, log_ids: List[str]) -> bool:
+        """자율 로그 삭제 (벌크)"""
+        if not CHROMADB_AVAILABLE or not hasattr(self, 'autonomous_logs_collection'): return False
+        try:
+            self.autonomous_logs_collection.delete(ids=log_ids)
+            return True
+        except Exception as e:
+            logger.error(f"Error deleting autonomous logs: {e}")
+            return False
 
 
 if __name__ == "__main__":
