@@ -138,7 +138,7 @@ async def update_model_config(req: ModelConfigRequest):
         if req.component == "worker":
             worker_url = NexusConfig.get_worker_url()
             async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session:
-                async with session.post(f"{worker_url}/api/config/model", json=req.dict()) as resp:
+                async with session.post(f"{worker_url}/api/config/model", json=req.model_dump()) as resp:
                     if resp.status != 200:
                         raise HTTPException(status_code=resp.status, detail="Worker model update failed")
                     return await resp.json()

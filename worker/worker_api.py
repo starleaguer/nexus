@@ -13,6 +13,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
 import ollama
+import logging
+
+# 로깅 설정
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # 프로젝트 루트를 sys.path에 추가하여 shared 모듈 등을 찾을 수 있게 함
 PROJECT_ROOT = str(Path(__file__).parent.parent)
@@ -227,9 +232,16 @@ async def list_models():
     """
     try:
         # ollama.list() 는 현재 사용 가능한 모델 정보를 반환합니다.
-        models = ollama.list()
-        # 반환 형식: {"models": [{...}, {...}]}
-        return {"models": models}
+        resp = ollama.list()
+        # 리스트 형태이든 객체 형태이든 처리
+        if isinstance(resp, dict):
+            models_data = resp.get("models", [])
+        else:
+            # newer versions of ollama lib might return a ListResponse object
+            models_data = getattr(resp, "models", [])
+            
+        model_names = [m.get("model") if isinstance(m, dict) else getattr(m, "model", str(m)) for m in models_data]
+        return model_names
     except Exception as e:
         logger.error(f"Ollama 모델 조회 실패: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve Ollama models")
@@ -283,6 +295,36 @@ async def execute_task_raw(task: TaskRequest):
             status="failed",
             error=str(e)
         )
+
+
+class ModelConfigRequest(BaseModel):
+    component: str  # "manager" or "worker"
+    model: str
+
+
+@app.post("/api/config/model")
+async def update_model_config(req: ModelConfigRequest):
+    """Worker의 모델 설정 업데이트 및 매니페스트 저장"""
+    try:
+        manifest = load_manifest()
+        if "models" not in manifest:
+            manifest["models"] = {}
+        
+        # worker 컴포넌트인 경우만 업데이트 (혹은 전체 허용)
+        manifest["models"][req.component] = req.model
+        
+        # NexusConfig.MANIFEST_PATH 에 저장
+        with open(NexusConfig.MANIFEST_PATH, "w", encoding="utf-8") as f:
+            json.dump(manifest, f, indent=2, ensure_ascii=False)
+        
+        logger.info(f"✅ [Worker] 매니페스트 업데이트 완료: {req.component} -> {req.model}")
+        # 캐시 초기화 (shared config_loader 내부 로직이 있다면)
+        NexusConfig._manifest = None
+        
+        return {"status": "success", "message": f"Worker가 {req.component} 모델을 {req.model}로 업데이트했습니다."}
+    except Exception as e:
+        logger.error(f"Worker model update error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 if __name__ == "__main__":

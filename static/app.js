@@ -258,20 +258,40 @@ document.addEventListener('DOMContentLoaded', () => {
     // System: Config & Timeouts
     async function loadActiveTools() {
         activeSkillsList.innerHTML = '<li>Loading...</li>';
+        const loadingIndicator = document.getElementById('models-loading-indicator');
+        const selectArea = document.getElementById('models-select-area');
+        
+        if (loadingIndicator) loadingIndicator.style.display = 'flex';
+        if (selectArea) selectArea.style.opacity = '0.5';
+
         try {
             const statusRes = await fetch('/api/status');
             const statusData = await statusRes.json();
-            const modelsRes = await fetch('/models');
-            const models = await modelsRes.json();
+            
+            try {
+                const modelsRes = await fetch('/api/models');
+                if (!modelsRes.ok) throw new Error('Failed to fetch models');
+                const models = await modelsRes.json();
 
-            const managerSelect = document.getElementById('manager-model-select');
-            const workerSelect = document.getElementById('worker-model-select');
-            managerSelect.innerHTML = ''; workerSelect.innerHTML = '';
+                const managerSelect = document.getElementById('manager-model-select');
+                const workerSelect = document.getElementById('worker-model-select');
+                managerSelect.innerHTML = ''; 
+                workerSelect.innerHTML = '';
 
-            models.forEach(model => {
-                managerSelect.innerHTML += `<option value="${model}" ${model === statusData.manager_model ? 'selected' : ''}>${model}</option>`;
-                workerSelect.innerHTML += `<option value="${model}" ${model === (statusData.worker_model || 'gemma4:e4b') ? 'selected' : ''}>${model}</option>`;
-            });
+                if (Array.isArray(models) && models.length > 0) {
+                    models.forEach(model => {
+                        managerSelect.innerHTML += `<option value="${model}" ${model === statusData.manager_model ? 'selected' : ''}>${model}</option>`;
+                        workerSelect.innerHTML += `<option value="${model}" ${model === (statusData.worker_model || 'gemma4:latest') ? 'selected' : ''}>${model}</option>`;
+                    });
+                } else {
+                    managerSelect.innerHTML = '<option value="">모델 없음</option>';
+                    workerSelect.innerHTML = '<option value="">모델 없음</option>';
+                    showNotification('⚠️ Ollama에서 모델을 찾을 수 없습니다.');
+                }
+            } catch (modelErr) {
+                console.error('Model fetch error:', modelErr);
+                showNotification('❌ 워커에서 모델 목록을 가져오지 못했습니다.');
+            }
 
             if (statusData.timeouts) {
                 document.getElementById('worker-timeout-input').value = statusData.timeouts.worker || 120;
@@ -287,10 +307,22 @@ document.addEventListener('DOMContentLoaded', () => {
             (toolsData.skills || []).forEach(tool => {
                 activeSkillsList.innerHTML += `<li>${tool.name} <span class="badge-skill">Skill</span></li>`;
             });
+            (toolsData.mcp || []).forEach(tool => {
+                activeSkillsList.innerHTML += `<li>${tool.name} <span class="badge-mcp">MCP</span></li>`;
+            });
         } catch (err) {
-            console.error('System info load failed');
+            console.error('System info load failed:', err);
+            showNotification('❌ 시스템 정보를 불러오지 못했습니다.');
+        } finally {
+            if (loadingIndicator) loadingIndicator.style.display = 'none';
+            if (selectArea) {
+                selectArea.style.opacity = '1';
+                selectArea.style.pointerEvents = 'auto';
+            }
         }
     }
+
+    document.getElementById('refresh-models-btn')?.addEventListener('click', loadActiveTools);
 
     document.getElementById('save-models-btn').addEventListener('click', async () => {
         const managerModel = document.getElementById('manager-model-select').value;

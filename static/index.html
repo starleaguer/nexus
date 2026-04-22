@@ -165,18 +165,31 @@
                 
                 <div class="config-grid">
                     <div class="config-card">
-                        <h2><i class="fas fa-microchip"></i> Model Selection</h2>
-                        <div class="model-select-group">
-                            <div class="select-wrapper">
-                                <label>Manager Model</label>
-                                <select id="manager-model-select"></select>
-                            </div>
-                            <div class="select-wrapper">
-                                <label>Worker Model</label>
-                                <select id="worker-model-select"></select>
-                            </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                            <h2 style="margin-bottom: 0;"><i class="fas fa-microchip"></i> Model Selection</h2>
+                            <button id="refresh-models-btn" class="btn" style="width: auto; padding: 5px 12px; font-size: 0.8rem; background: rgba(255,255,255,0.1); color: white; border: 1px solid var(--glass-border);">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
                         </div>
-                        <button id="save-models-btn" class="btn btn-approve" style="margin-top: 15px; width: 100%;">모델 설정 저장</button>
+                        
+                        <div id="models-loading-indicator" class="loading-spinner" style="padding: 20px; display: none; height: auto;">
+                            <i class="fas fa-circle-notch fa-spin"></i>
+                            <span style="font-size: 0.8rem;">Fetching models...</span>
+                        </div>
+
+                        <div id="models-select-area">
+                            <div class="model-select-group">
+                                <div class="select-wrapper">
+                                    <label>Manager Model (Nexus Hub)</label>
+                                    <select id="manager-model-select"></select>
+                                </div>
+                                <div class="select-wrapper">
+                                    <label>Worker Model (Skill Execution)</label>
+                                    <select id="worker-model-select"></select>
+                                </div>
+                            </div>
+                            <button id="save-models-btn" class="btn btn-approve" style="margin-top: 15px; width: 100%;">모델 설정 저장</button>
+                        </div>
                     </div>
 
                     <div class="config-card">

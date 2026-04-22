@@ -4,7 +4,7 @@
   "description": "분산 AI 작업 관리 시스템",
   "models": {
     "worker": "gemma4:latest",
-    "manager": "gemma4:26b"
+    "manager": ""
   },
   "tools": {
     "skills": [
