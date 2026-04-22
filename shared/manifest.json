@@ -3,8 +3,13 @@
   "name": "nexus",
   "description": "분산 AI 작업 관리 시스템",
   "models": {
+<<<<<<< HEAD
     "worker": "gemma4:e4b",
     "manager": ""
+=======
+    "worker": "gemma4:latest",
+    "manager": "gemma4:26b"
+>>>>>>> 333c2c35dc9039cbfd8d270f865d539c16f7827a
   },
   "tools": {
     "skills": [

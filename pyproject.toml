@@ -26,6 +26,7 @@ dependencies = [
     "yt-dlp>=2026.3.17",
     "openai-whisper>=20250625",
     "duckduckgo-search>=8.1.1",
+    "google-genai>=1.0.0",
 ]
 
 [tool.uv.workspace]

@@ -99,14 +99,20 @@
                 
                 <div class="intelligence-sections">
                     <div class="intel-section">
-                        <h2><i class="fas fa-brain"></i> Learning Log</h2>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                            <h2 style="margin-bottom: 0;"><i class="fas fa-brain"></i> Learning Log</h2>
+                            <button id="delete-learnings-btn" class="btn btn-reject" style="width: auto; padding: 5px 15px; font-size: 0.85rem; display: none;">선택 삭제</button>
+                        </div>
                         <div class="learning-grid" id="learnings-list">
                             <!-- Learnings will be loaded here -->
                         </div>
                     </div>
                     
                     <div class="intel-section" style="margin-top: 30px;">
-                        <h2><i class="fas fa-chart-line"></i> Market Insights Log</h2>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                            <h2 style="margin-bottom: 0;"><i class="fas fa-chart-line"></i> Market Insights Log</h2>
+                            <button id="delete-autonomous-btn" class="btn btn-reject" style="width: auto; padding: 5px 15px; font-size: 0.85rem; display: none;">선택 삭제</button>
+                        </div>
                         <div class="learning-grid" id="autonomous-logs-list">
                             <!-- Autonomous Logs will be loaded here -->
                         </div>
@@ -122,10 +128,19 @@
                 </header>
 
                 <div class="yt-input-area">
-                    <div class="input-wrapper">
-                        <i class="fab fa-youtube" style="color: #ff4444; font-size: 1.2rem; flex-shrink:0;"></i>
-                        <input type="text" id="yt-url-input" placeholder="https://www.youtube.com/watch?v=..." autocomplete="off">
-                        <button id="yt-summarize-btn" class="btn btn-approve">요약하기</button>
+                    <div class="input-wrapper" style="flex-direction: column; gap: 10px; align-items: stretch; background: none; border: none; padding: 0;">
+                        <div style="display: flex; gap: 10px; background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border); border-radius: 12px; padding: 5px 15px; align-items: center;">
+                            <i class="fab fa-youtube" style="color: #ff4444; font-size: 1.2rem; flex-shrink:0;"></i>
+                            <input type="text" id="youtube-url" placeholder="https://www.youtube.com/watch?v=..." autocomplete="off" style="background: none; border: none; flex: 1; padding: 12px 5px; color: white; outline: none;">
+                        </div>
+                        <div style="display: flex; gap: 10px;">
+                            <select id="youtube-model-type" class="btn" style="width: auto; background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border); color: #888; font-size: 0.9rem; padding: 0 15px;">
+                                <option value="local">Local (Manager)</option>
+                                <option value="worker">Worker (Ollama)</option>
+                                <option value="gemini">Gemini (3.1 Flash-Lite)</option>
+                            </select>
+                            <button id="summarize-btn" class="btn btn-approve" style="flex: 1;">영상 요약 분석 시작</button>
+                        </div>
                     </div>
                 </div>
 

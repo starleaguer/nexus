@@ -96,7 +96,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Intelligence: Learning Log & Autonomous Logs
     async function loadLearnings() {
         const list = document.getElementById('learnings-list');
+        const deleteLearningsBtn = document.getElementById('delete-learnings-btn');
         list.innerHTML = '<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i><span>Loading learnings...</span></div>';
+        deleteLearningsBtn.style.display = 'none';
 
         try {
             const response = await fetch('/api/learnings');
@@ -109,11 +111,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 data.learnings.forEach(item => {
                     const card = document.createElement('div');
                     card.className = 'learning-card';
-                    card.style = 'background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border); border-radius: 12px; padding: 15px; margin-bottom: 15px; border-left: 4px solid var(--primary-accent);';
+                    card.style = 'background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border); border-radius: 12px; padding: 15px; margin-bottom: 15px; border-left: 4px solid var(--primary-accent); position: relative; cursor: pointer;';
                     card.innerHTML = `
+                        <input type="checkbox" class="log-checkbox" data-id="${item.id}" style="position: absolute; right: 15px; top: 15px; width: 18px; height: 18px; cursor: pointer;">
                         <div style="font-size: 0.8rem; color: #888; margin-bottom: 8px;">${new Date(item.timestamp).toLocaleString()}</div>
-                        <div style="font-size: 1rem; line-height: 1.5;">${item.content}</div>
+                        <div style="font-size: 1rem; line-height: 1.5; padding-right: 30px;">${item.content}</div>
                     `;
+                    card.onclick = (e) => {
+                        if (e.target.tagName !== 'INPUT') {
+                            const cb = card.querySelector('.log-checkbox');
+                            cb.checked = !cb.checked;
+                            updateDeleteButton('learnings');
+                        }
+                    };
+                    card.querySelector('.log-checkbox').onchange = () => updateDeleteButton('learnings');
                     list.appendChild(card);
                 });
             }
@@ -123,7 +134,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Load Autonomous Logs
         const autoList = document.getElementById('autonomous-logs-list');
+        const deleteAutoBtn = document.getElementById('delete-autonomous-btn');
         autoList.innerHTML = '<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i><span>Loading market insights...</span></div>';
+        deleteAutoBtn.style.display = 'none';
 
         try {
             const response = await fetch('/api/autonomous/logs');
@@ -136,12 +149,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 data.logs.forEach(item => {
                     const card = document.createElement('div');
                     card.className = 'learning-card';
-                    card.style = 'background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border); border-radius: 12px; padding: 15px; margin-bottom: 15px; border-left: 4px solid #a855f7;';
-                    // The report format can contain markdown, so format it
+                    card.style = 'background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border); border-radius: 12px; padding: 15px; margin-bottom: 15px; border-left: 4px solid #a855f7; position: relative; cursor: pointer;';
                     card.innerHTML = `
+                        <input type="checkbox" class="auto-log-checkbox" data-id="${item.id}" style="position: absolute; right: 15px; top: 15px; width: 18px; height: 18px; cursor: pointer;">
                         <div style="font-size: 0.8rem; color: #888; margin-bottom: 8px;">${new Date(item.timestamp).toLocaleString()}</div>
-                        <div style="font-size: 0.95rem; line-height: 1.6; color: #e2e8f0; max-height: 300px; overflow-y: auto; padding-right: 10px;">${formatReport(item.content)}</div>
+                        <div style="font-size: 0.95rem; line-height: 1.6; color: #e2e8f0; max-height: 300px; overflow-y: auto; padding-right: 30px;">${formatReport(item.content)}</div>
                     `;
+                    card.onclick = (e) => {
+                        if (e.target.tagName !== 'INPUT') {
+                            const cb = card.querySelector('.auto-log-checkbox');
+                            cb.checked = !cb.checked;
+                            updateDeleteButton('autonomous');
+                        }
+                    };
+                    card.querySelector('.auto-log-checkbox').onchange = () => updateDeleteButton('autonomous');
                     autoList.appendChild(card);
                 });
             }
@@ -149,6 +170,54 @@ document.addEventListener('DOMContentLoaded', () => {
             autoList.innerHTML = '<div class="loading-spinner">시장 동향 로드 실패</div>';
         }
     }
+
+    function updateDeleteButton(type) {
+        if (type === 'learnings') {
+            const checked = document.querySelectorAll('#learnings-list .log-checkbox:checked').length;
+            document.getElementById('delete-learnings-btn').style.display = checked > 0 ? 'block' : 'none';
+        } else {
+            const checked = document.querySelectorAll('#autonomous-logs-list .auto-log-checkbox:checked').length;
+            document.getElementById('delete-autonomous-btn').style.display = checked > 0 ? 'block' : 'none';
+        }
+    }
+
+    document.getElementById('delete-learnings-btn').addEventListener('click', async () => {
+        const checked = Array.from(document.querySelectorAll('#learnings-list .log-checkbox:checked')).map(cb => cb.getAttribute('data-id'));
+        if (checked.length === 0) return;
+        if (!confirm(`${checked.length}건의 학습 로그를 삭제하시겠습니까?`)) return;
+
+        try {
+            const res = await fetch('/api/learnings/delete-bulk', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids: checked })
+            });
+            const result = await res.json();
+            showNotification(result.message);
+            loadLearnings();
+        } catch (err) {
+            showNotification('삭제 실패');
+        }
+    });
+
+    document.getElementById('delete-autonomous-btn').addEventListener('click', async () => {
+        const checked = Array.from(document.querySelectorAll('#autonomous-logs-list .auto-log-checkbox:checked')).map(cb => cb.getAttribute('data-id'));
+        if (checked.length === 0) return;
+        if (!confirm(`${checked.length}건의 자율 로그를 삭제하시겠습니까?`)) return;
+
+        try {
+            const res = await fetch('/api/autonomous/logs/delete-bulk', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids: checked })
+            });
+            const result = await res.json();
+            showNotification(result.message);
+            loadLearnings();
+        } catch (err) {
+            showNotification('삭제 실패');
+        }
+    });
 
     // Tool Hunter
     const researchBtn = document.getElementById('research-btn');
@@ -268,29 +337,47 @@ document.addEventListener('DOMContentLoaded', () => {
             const statusRes = await fetch('/api/status');
             const statusData = await statusRes.json();
             
+            const managerSelect = document.getElementById('manager-model-select');
+            const workerSelect = document.getElementById('worker-model-select');
+
+            // 1. Manager 모델 로드
             try {
-                const modelsRes = await fetch('/api/models');
-                if (!modelsRes.ok) throw new Error('Failed to fetch models');
-                const models = await modelsRes.json();
-
-                const managerSelect = document.getElementById('manager-model-select');
-                const workerSelect = document.getElementById('worker-model-select');
-                managerSelect.innerHTML = ''; 
-                workerSelect.innerHTML = '';
-
-                if (Array.isArray(models) && models.length > 0) {
-                    models.forEach(model => {
+                console.log('Fetching manager models...');
+                const mgrRes = await fetch('/api/models/manager');
+                const mgrModels = await mgrRes.json();
+                console.log('Manager models received:', mgrModels);
+                
+                managerSelect.innerHTML = '';
+                if (Array.isArray(mgrModels) && mgrModels.length > 0) {
+                    mgrModels.forEach(model => {
                         managerSelect.innerHTML += `<option value="${model}" ${model === statusData.manager_model ? 'selected' : ''}>${model}</option>`;
-                        workerSelect.innerHTML += `<option value="${model}" ${model === (statusData.worker_model || 'gemma4:latest') ? 'selected' : ''}>${model}</option>`;
                     });
                 } else {
-                    managerSelect.innerHTML = '<option value="">모델 없음</option>';
-                    workerSelect.innerHTML = '<option value="">모델 없음</option>';
-                    showNotification('⚠️ Ollama에서 모델을 찾을 수 없습니다.');
+                    managerSelect.innerHTML = '<option value="">No local models found</option>';
                 }
-            } catch (modelErr) {
-                console.error('Model fetch error:', modelErr);
-                showNotification('❌ 워커에서 모델 목록을 가져오지 못했습니다.');
+            } catch (err) {
+                console.error('Manager models load failed:', err);
+                managerSelect.innerHTML = `<option value="">Error loading local models</option>`;
+            }
+
+            // 2. Worker 모델 로드
+            try {
+                console.log('Fetching worker models...');
+                const wrkRes = await fetch('/api/models/worker');
+                const wrkModels = await wrkRes.json();
+                console.log('Worker models received:', wrkModels);
+                
+                workerSelect.innerHTML = '';
+                if (Array.isArray(wrkModels) && wrkModels.length > 0) {
+                    wrkModels.forEach(model => {
+                        workerSelect.innerHTML += `<option value="${model}" ${model === statusData.worker_model ? 'selected' : ''}>${model}</option>`;
+                    });
+                } else {
+                    workerSelect.innerHTML = '<option value="">No worker models found</option>';
+                }
+            } catch (err) {
+                console.error('Worker models load failed:', err);
+                workerSelect.innerHTML = `<option value="">Error loading worker models</option>`;
             }
 
             if (statusData.timeouts) {
@@ -410,11 +497,13 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentSummary = '';
     let currentUrl = '';
 
-    document.getElementById('yt-summarize-btn').addEventListener('click', async () => {
-        const url = document.getElementById('yt-url-input').value.trim();
+    document.getElementById('summarize-btn').addEventListener('click', async () => {
+        const url = document.getElementById('youtube-url').value.trim();
+        const modelType = document.getElementById('youtube-model-type').value;
+        
         if (!url) { showNotification('YouTube URL을 입력하세요.'); return; }
 
-        const btn = document.getElementById('yt-summarize-btn');
+        const btn = document.getElementById('summarize-btn');
         btn.disabled = true;
         btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> 분석 중...';
         document.getElementById('yt-result-area').style.display = 'none';
@@ -423,7 +512,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await fetch('/api/youtube/summarize', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url })
+                body: JSON.stringify({ url, model_type: modelType })
             });
             const data = await res.json();
 
@@ -436,7 +525,7 @@ document.addEventListener('DOMContentLoaded', () => {
             currentUrl = url;
 
             document.getElementById('yt-video-link').href = url;
-            document.getElementById('yt-video-link').textContent = `youtu.be/${data.video_id} (${data.language})`;
+            document.getElementById('yt-video-link').textContent = `youtu.be/${data.video_id} (${data.language || 'Video'})`;
             document.getElementById('yt-summary-content').innerHTML = formatReport(data.summary);
             document.getElementById('yt-user-comment').value = '';
             document.getElementById('yt-result-area').style.display = 'block';
@@ -444,12 +533,12 @@ document.addEventListener('DOMContentLoaded', () => {
             showNotification('요약 요청 실패');
         } finally {
             btn.disabled = false;
-            btn.innerHTML = '요약하기';
+            btn.innerHTML = '영상 요약 분석 시작';
         }
     });
 
-    document.getElementById('yt-url-input').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') document.getElementById('yt-summarize-btn').click();
+    document.getElementById('youtube-url').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') document.getElementById('summarize-btn').click();
     });
 
     document.getElementById('yt-note-btn').addEventListener('click', async () => {

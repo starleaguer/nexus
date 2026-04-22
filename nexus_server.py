@@ -1,3 +1,4 @@
+import os
 import logging
 import asyncio
 import json
@@ -27,6 +28,10 @@ from manager.researcher import ToolHunter
 # AutonomousAgent import removed (moved to worker)
 from shared.config_loader import NexusConfig
 import ollama
+import yt_dlp
+from youtube_transcript_api import YouTubeTranscriptApi, TranscriptsDisabled, NoTranscriptFound
+from urllib.parse import urlparse, parse_qs
+import re
 
 # 로컬 워커 프로세스 관리
 worker_process = None
@@ -106,6 +111,7 @@ class ModelConfigRequest(BaseModel):
 
 class YouTubeSummarizeRequest(BaseModel):
     url: str
+    model_type: str = "local" # "local" or "gemini"
 
 class KnowledgeNoteRequest(BaseModel):
     content: str
@@ -113,10 +119,135 @@ class KnowledgeNoteRequest(BaseModel):
     user_comment: str = ""
     category: str = "youtube"
 
+class BulkDeleteRequest(BaseModel):
+    ids: List[str]
+
+# ==================== YouTube Extraction Utils (Local) ====================
+def extract_video_id(url: str) -> str | None:
+    parsed_url = urlparse(url)
+    if parsed_url.hostname == 'youtu.be':
+        return str(parsed_url.path)[1:]
+    if parsed_url.hostname in ('www.youtube.com', 'youtube.com'):
+        if parsed_url.path == '/watch':
+            p = parse_qs(parsed_url.query)
+            if 'v' in p: return p['v'][0]
+        if parsed_url.path.startswith('/embed/'):
+            return parsed_url.path.split('/')[2]
+        if parsed_url.path.startswith('/v/'):
+            return parsed_url.path.split('/')[2]
+        if parsed_url.path.startswith('/shorts/'):
+            return parsed_url.path.split('/')[2]
+    return None
+
+def get_yt_metadata(url: str):
+    ydl_opts = {'quiet': True, 'skip_download': True, 'no_warnings': True, 'extract_flat': True}
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+            return {
+                "title": info.get('title', 'Unknown Title'),
+                "author": info.get('uploader', info.get('channel', 'Unknown Author')),
+                "thumbnail": info.get('thumbnail', ''),
+                "description": info.get('description', ''),
+            }
+    except Exception as e:
+        logger.warning(f"Metadata extraction failed: {e}")
+        return {"title": "Unknown", "author": "Unknown", "thumbnail": "", "description": ""}
+
+def get_yt_transcript(video_id: str):
+    logger.info(f"Trying to get transcript for video_id: {video_id}...")
+    from youtube_transcript_api import YouTubeTranscriptApi
+    try:
+        # tmp/youtube_extractor.py 방식: 객체 속성 접근이 필요함
+        ytt_api = YouTubeTranscriptApi()
+        transcript_list = ytt_api.list(video_id)
+        transcript = transcript_list.find_transcript(['ko', 'en'])
+        
+        data = transcript.fetch()
+        # FetchedTranscriptSnippet 객체 또는 dict 모두 지원하도록 getattr 사용
+        text = " ".join([getattr(d, 'text', d.get('text', '') if isinstance(d, dict) else '') for d in data])
+        
+        logger.info(f"Transcript fetched successfully (Method: API, Lang: {transcript.language_code})")
+        return {"text": text, "language": transcript.language_code, "method": "api"}
+            
+    except Exception as e:
+        logger.error(f"YouTube API failed for {video_id}: {type(e).__name__} - {str(e)}")
+        return {"error": str(e)}
+
+async def transcribe_audio_local(url: str):
+    """Whisper를 사용하여 로컬에서 음성 인식 (Fallback)"""
+    try:
+        import whisper
+        audio_file = f"temp_server_audio_{os.getpid()}"
+        ydl_opts = {
+            'format': 'bestaudio/best',
+            'postprocessors': [{'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3', 'preferredquality': '128'}],
+            'outtmpl': audio_file, 'quiet': True, 'no_warnings': True,
+        }
+        mp3_path = f"{audio_file}.mp3"
+        
+        # 다운로드는 블로킹 작업이므로 스레드에서 실행
+        def download():
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([url])
+        
+        await asyncio.to_thread(download)
+        
+        if not os.path.exists(mp3_path):
+            return {"error": "Audio download failed"}
+            
+        # Whisper 로드 및 변환도 블로킹이므로 스레드에서 실행
+        def run_whisper():
+            model = whisper.load_model("base")
+            return model.transcribe(mp3_path)
+            
+        result = await asyncio.to_thread(run_whisper)
+        
+        if os.path.exists(mp3_path):
+            os.remove(mp3_path)
+            
+        return {"text": result["text"], "language": result.get("language", "unknown"), "method": "whisper"}
+    except Exception as e:
+        logger.error(f"Whisper local error: {e}")
+        return {"error": str(e)}
+
 # ==================== 엔드포인트 ====================
 
-@app.get("/api/models")
-async def get_models():
+@app.get("/api/models/manager")
+async def get_manager_models():
+    """Get Ollama model list from the local server (Manager)"""
+    try:
+        logger.info("🔍 Fetching local Ollama models for Manager...")
+        # ollama.list() returns the model information
+        resp = ollama.list()
+        
+        # 리스트 또는 객체 응답 처리
+        if hasattr(resp, 'models'):
+            models_data = resp.models
+        elif isinstance(resp, dict):
+            models_data = resp.get("models", [])
+        else:
+            models_data = resp # Fallback for unexpected formats
+            
+        model_names = []
+        for m in models_data:
+            if isinstance(m, dict):
+                model_names.append(m.get("model"))
+            elif hasattr(m, 'model'):
+                model_names.append(m.model)
+            else:
+                model_names.append(str(m))
+        
+        logger.info(f"✅ Found {len(model_names)} local models: {model_names}")
+        return model_names
+    except Exception as e:
+        logger.error(f"❌ Local Ollama models check failed: {e}")
+        # 기본값 제공 (Ollama가 꺼져있을 경우 등)
+        return ["gemma2:27b", "gemma2:9b", "gemma4:latest"]
+
+@app.get("/api/models/worker")
+@app.get("/api/models") # 하위 호환성을 위해 유지
+async def get_worker_models():
     """Proxy request to worker for Ollama model list"""
     worker_url = NexusConfig.get_worker_url()
     async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session:
@@ -127,7 +258,7 @@ async def get_models():
                 data = await resp.json()
                 return data
         except Exception as e:
-            logger.error(f"Failed to proxy models request: {e}")
+            logger.error(f"Failed to proxy worker models request: {e}")
             raise HTTPException(status_code=500, detail="Unable to retrieve models from worker")
 
 @app.post("/api/config/model")
@@ -182,55 +313,105 @@ async def get_learnings():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/api/learnings/delete-bulk")
+async def delete_learnings_bulk(req: BulkDeleteRequest):
+    """학습 로그 대량 삭제"""
+    try:
+        success = memory.delete_learnings(req.ids)
+        if success:
+            return {"status": "success", "message": f"{len(req.ids)}건의 학습 로그가 삭제되었습니다."}
+        else:
+            raise HTTPException(status_code=500, detail="삭제 중 오류가 발생했습니다.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/api/youtube/summarize")
 async def youtube_summarize(req: YouTubeSummarizeRequest):
-    """유튜브 URL 추출 후 Multi-Agent 기반 고도화 요약"""
+    """유튜브 URL 추출부터 요약까지 MacBook(Manager)에서 온전히 처리"""
     try:
-        import aiohttp
         from manager.manager_core import OllamaClient
         
-        # 1. Worker에게 youtube_summarizer 스킬 실행 요청 (Metadata + Transcript/Whisper)
-        worker_url = NexusConfig.get_worker_url()
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=300)) as session:
-            payload = {"tool_name": "youtube_summarizer", "params": {"url": req.url}}
-            async with session.post(f"{worker_url}/execute", json=payload) as resp:
-                if resp.status != 200:
-                    raise HTTPException(status_code=resp.status, detail="Worker 오류")
-                worker_result = await resp.json()
-
-        raw = worker_result.get("raw_result", {})
-        if raw.get("error"):
-            return {"status": "error", "message": raw["error"]}
-
-        transcript = raw.get("transcript", "")
-        if not transcript:
-            return {"status": "error", "message": "추출된 텍스트가 없습니다."}
-
-        # 2. Multi-Agent 요약 파이프라인
-        llm = OllamaClient()
+        # 1. 정보 추출 (Local)
+        logger.info(f"📹 YouTube 요약 요청 (Server-Side): {req.url}")
+        video_id = extract_video_id(req.url)
+        if not video_id:
+            return {"status": "error", "message": "유효하지 않은 YouTube URL입니다."}
+            
+        metadata = get_yt_metadata(req.url)
         
+        # 2. 자막 추출 (API -> Whisper Fallback)
+        result = get_yt_transcript(video_id)
+        if "error" in result:
+            logger.info("API 자막 실패, Whisper 로컬 변환 시도...")
+            result = await transcribe_audio_local(req.url)
+            
+        if "error" in result:
+            return {"status": "error", "message": f"내용 추출 실패: {result['error']}"}
+            
+        transcript = result["text"]
+        language = result.get("language", "unknown")
+
+        # 3. 요약 파이프라인 (Local)
         def chunk_text(text, size=4000):
             return [text[i:i+size] for i in range(0, len(text), size)]
             
         chunks = chunk_text(transcript)
-        logger.info(f"YouTube transcript split into {len(chunks)} chunks.")
+        logger.info(f"Transcript length: {len(transcript)}, chunks: {len(chunks)}")
 
-        # Agent 1: 핵심 팩트 추출
+        if req.model_type == "gemini":
+            try:
+                from google import genai
+                api_key = os.getenv("GOOGLE_API_KEY")
+                if not api_key:
+                    raise Exception("GOOGLE_API_KEY가 없습니다.")
+                client = genai.Client(api_key=api_key)
+                
+                def chat_func(system, user):
+                    prompt = f"{system}\n\n[내용]\n{user}"
+                    response = client.models.generate_content(
+                        model="gemini-3.1-flash-lite-preview",
+                        contents=prompt
+                    )
+                    return response.text
+                logger.info("✨ Using New Gemini SDK (gemini-3.1-flash-lite-preview)")
+            except Exception as e:
+                logger.error(f"Gemini error: {e}, fallback to local")
+                llm = OllamaClient()
+                chat_func = llm.chat
+        elif req.model_type == "worker":
+            # Worker의 Ollama 사용
+            worker_url = NexusConfig.get_worker_url().replace(":8000", ":11434") # Ollama 기본 포트 시도
+            worker_model = NexusConfig.get_model("worker")
+            logger.info(f"👷 Using Worker LLM ({worker_model}) at {worker_url}")
+            
+            from ollama import Client
+            worker_client = Client(host=worker_url)
+            
+            def chat_func(system, user):
+                resp = worker_client.chat(
+                    model=worker_model,
+                    messages=[
+                        {"role": "system", "content": system},
+                        {"role": "user", "content": user}
+                    ]
+                )
+                return resp['message']['content']
+        else:
+            llm = OllamaClient()
+            chat_func = llm.chat
+            logger.info("🏠 Using Local model (Manager)")
+
+        # Agent Pipeline
         extracted_facts = []
-        extractor_system = "너는 데이터 추출가야. 스크립트에서 시청자 인사나 잡담은 무시하고 핵심 주장과 정보만 추출해줘."
-        
         for i, chunk in enumerate(chunks):
-            prompt = f"다음 스크립트에서 중요한 정보가 누락되지 않도록 명확하게 요약해 주세요:\n\n{chunk}"
-            fact = llm.chat(extractor_system, prompt)
+            fact = chat_func("너는 정보 추출가야. 핵심 내용만 요약해줘.", chunk)
             extracted_facts.append(fact)
             
         combined_facts = "\n\n".join(extracted_facts)
-
-        # Agent 2: 최종 구조화 요약 작성
-        writer_system = "당신은 전문 에디터입니다. 추출된 핵심 팩트들을 바탕으로 지식 베이스용으로 구조화하여 완벽하게 요약 정리하는 AI 어시스턴트입니다."
-        writer_prompt = f"""다음은 긴 영상 스크립트에서 추출된 핵심 팩트 데이터 모음입니다.
-이를 바탕으로, 반드시 **한국어**로, 그리고 아래의 일관된 마크다운 구조를 엄격하게 지켜서 요약해 주세요.
-
+        
+        # tmp/summarizer.py의 구조화된 프롬프트 적용
+        writer_system = "너는 유튜브 스크립트 요약 전문가야. 반드시 한국어로, 아래의 일관된 마크다운 구조를 엄격하게 지켜서 요약해줘."
+        writer_prompt = f"""다음 추출된 데이터들을 바탕으로 아래 구조에 맞춰서 요약해줘.
 ---
 ### 📌 1. 핵심 요약 (Overview)
 - 영상의 주제와 가장 중요한 결론을 2~3문장 이내로 직관적으로 요약하세요.
@@ -240,24 +421,28 @@ async def youtube_summarize(req: YouTubeSummarizeRequest):
 - 각 포인트의 제목은 **굵은 글씨**로 강조하고, 간단한 부연 설명을 덧붙이세요.
 
 ### 📜 3. 세부 내용 (Detailed Summary)
-- 논리적 흐름에 따라 전체 내용을 상세히 서술하세요. 중요한 키워드는 **굵게** 표시하세요.
+- 영상의 구조와 화자의 의도를 반영해서 마치 직접 본 것처럼 요약해줘.
+- 중요한 키워드나 개념은 `단어` 또는 **단어** 형태로 강조하세요.
 
-### 💡 4. 인사이트 (Insights)
-- 이 영상에서 얻을 수 있는 교훈이나 실무 적용 방안을 작성하세요.
+### 💡 4. 인사이트 (Insights / Takeaways)
+- 이 영상에서 얻을 수 있는 교훈, 실무 적용 방안, 또는 새롭게 알게 된 통찰을 1~2가지 작성하세요.
 ---
-[데이터]
+[추출된 팩트 데이터]
 {combined_facts}"""
 
-        final_summary = llm.chat(writer_system, writer_prompt)
+        final_summary = chat_func(writer_system, writer_prompt)
         
         return {
             "status": "success",
-            "video_id": raw.get("video_id"),
+            "video_id": video_id,
             "url": req.url,
-            "metadata": raw.get("metadata"),
-            "method": raw.get("method"),
+            "metadata": metadata,
+            "language": language,
             "summary": final_summary
         }
+    except Exception as e:
+        logger.error(f"YouTube summarize error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
         logger.error(f"YouTube summarize error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -291,6 +476,18 @@ async def get_autonomous_logs():
     try:
         logs = memory.get_autonomous_logs()
         return {"status": "success", "logs": logs}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/autonomous/logs/delete-bulk")
+async def delete_autonomous_logs_bulk(req: BulkDeleteRequest):
+    """자율 로그 대량 삭제"""
+    try:
+        success = memory.delete_autonomous_logs(req.ids)
+        if success:
+            return {"status": "success", "message": f"{len(req.ids)}건의 자율 로그가 삭제되었습니다."}
+        else:
+            raise HTTPException(status_code=500, detail="삭제 중 오류가 발생했습니다.")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
