@@ -4715,6 +4715,9 @@ requires-dist = [
     { name = "tradingview-ta", specifier = ">=3.3.0" },
 ]
 
+[package.metadata.requires-dev]
+dev = []
+
 [[package]]
 name = "tradingview-screener"
 version = "3.1.0"
