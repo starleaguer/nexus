@@ -1,334 +1,306 @@
-"""
-Nexus Main - 분산 AI 작업 관리 시스템 진입점
-방어적 코딩 적용: 네트워크 병목, 서버 다운 등 예외 상황 처리
-"""
-import asyncio
 import os
-import json
-import sys
-from pathlib import Path
-from typing import Optional
 import logging
-from shared.config_loader import NexusConfig
+import asyncio
+import json
+from pathlib import Path
+from typing import Dict, Any, List, Optional
+from contextlib import asynccontextmanager
 
-# 프로젝트 루트 경로
-PROJECT_ROOT = Path(__file__).parent
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+import aiohttp
 
 # 로깅 설정
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s"
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
+# 외부 라이브러리 로그 억제
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
-# ==================== 설정 ====================
-class Config:
-    """설정 관리"""
-    MAX_RETRIES = 3           # 최대 재시도 횟수
-    RETRY_DELAY = 2           # 재시도 간격 (초)
-    WORKER_TIMEOUT = NexusConfig.get_timeout("worker", 60)
-    OLLAMA_TIMEOUT = NexusConfig.get_timeout("ollama", 60)
+from core.manager_core import ManagerCore, AgentState
+from core.researcher import ToolHunter
+from core.autonomous_agent import AutonomousAgent
+from core.config_loader import NexusConfig
+import ollama
+import yt_dlp
+from urllib.parse import urlparse, parse_qs
+import re
+
+# 전역 인스턴스
+core = ManagerCore()
+hunter = ToolHunter()
+autonomous_agent = AutonomousAgent(core)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 사용자가 PC에서 'ollama serve'를 실행한 상태라고 가정합니다.
+    logger.info("🚀 Nexus Hub Server starting (Consolidated mode)...")
+    logger.info(f"🔗 Worker LLM expected at: {NexusConfig.get_worker_url()}")
     
-    # 설정 로더 사용
-    DEFAULT_IP = "127.0.0.1"  # config_loader에서 처리됨
-    DEFAULT_PORT = 8000
-    MANIFEST_PATH = NexusConfig.MANIFEST_PATH
+    # 자율 모드 시작
+    autonomous_agent.start()
+    
+    yield
+    
+    # 종료 시 자율 모드 중지
+    autonomous_agent.stop()
+    logger.info("🛑 Nexus Hub Server shutting down...")
 
+app = FastAPI(title="Nexus Hub Dashboard", lifespan=lifespan)
 
-def load_manifest() -> dict:
-    """매니페스트 로드 (중앙 로더 사용)"""
-    return NexusConfig.load_manifest()
+# CORS 설정
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
+# 스태틱 파일 설정 (UI)
+STATIC_DIR = Path(__file__).parent / "static"
+STATIC_DIR.mkdir(exist_ok=True)
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
-def get_worker_url() -> str:
-    """RTX Worker URL 가져오기 (중앙 로더 사용)"""
-    url = NexusConfig.get_worker_url()
-    logger.info(f"Worker URL 확인: {url}")
-    return url
+# 초기화
+manager = core
+memory = core.memory
 
+# ==================== 모델 정의 ====================
+class ChatRequest(BaseModel):
+    query: str
+    user_id: str = "web_user"
 
-def build_system_prompt(manifest: dict) -> str:
-    """매니페스트에서 도구 목록을 읽어 시스템 프롬프트 구성"""
+class ApproveRequest(BaseModel):
+    tool_name: str
+
+class ResearchRequest(BaseModel):
+    query: str
+
+class TimeoutConfigRequest(BaseModel):
+    worker: int
+    ollama: int
+
+class IntervalConfigRequest(BaseModel):
+    interval: int
+
+class ModelConfigRequest(BaseModel):
+    component: str  # "core" or "worker"
+    model: str
+
+class YouTubeSummarizeRequest(BaseModel):
+    url: str
+    model_type: str = "local" # "local", "worker", "gemini"
+
+class KnowledgeNoteRequest(BaseModel):
+    content: str
+    source_url: str = ""
+    user_comment: str = ""
+    category: str = "youtube"
+
+class BulkDeleteRequest(BaseModel):
+    ids: List[str]
+
+# ==================== YouTube Extraction Utils ====================
+def extract_video_id(url: str) -> str | None:
+    parsed_url = urlparse(url)
+    if parsed_url.hostname == 'youtu.be':
+        return str(parsed_url.path)[1:]
+    if parsed_url.hostname in ('www.youtube.com', 'youtube.com'):
+        if parsed_url.path == '/watch':
+            p = parse_qs(parsed_url.query)
+            if 'v' in p: return p['v'][0]
+        if parsed_url.path.startswith('/embed/'):
+            return parsed_url.path.split('/')[2]
+        if parsed_url.path.startswith('/v/'):
+            return parsed_url.path.split('/')[2]
+        if parsed_url.path.startswith('/shorts/'):
+            return parsed_url.path.split('/')[2]
+    return None
+
+def get_yt_metadata(url: str):
+    ydl_opts = {'quiet': True, 'skip_download': True, 'no_warnings': True, 'extract_flat': True}
     try:
-        tools = manifest.get("tools", {})
-        skills = tools.get("skills", [])
-        mcp = tools.get("mcp", [])
-        
-        prompt = """너는 투자 분석 에이전트 'Nexus'야.
-사용자의 투자 질문에 대해 분석하고 권고해줘.
-
-사용 가능한 도구:
-"""
-        # 스킬 목록 추가
-        if skills:
-            prompt += "\n[스킬]\n"
-            for skill in skills:
-                prompt += f"- {skill['name']}: {skill.get('description', '')}\n"
-                for cap in skill.get("capabilities", []):
-                    prompt += f"  - capability: {cap}\n"
-        
-        # MCP 도구 목록 추가
-        if mcp:
-            prompt += "\n[MCP 도구]\n"
-            for tool in mcp:
-                prompt += f"- {tool['name']}: {tool.get('description', '')}\n"
-        
-        prompt += """
-작업 흐름:
-1. 사용자의 질문을 분석하여 의도 파악
-2. 관련 투자 원칙을 메모리에서 검색
-3. 적절한 도구를 선택하여 Worker에 요청
-4. 결과를 분석하여 최종 투자 권고 리포트 작성
-
-항상 전문적이고 객관적인 자문을 제공해."""
-        
-        return prompt
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+            return {
+                "title": info.get('title', 'Unknown Title'),
+                "author": info.get('uploader', info.get('channel', 'Unknown Author')),
+                "thumbnail": info.get('thumbnail', ''),
+                "description": info.get('description', ''),
+            }
     except Exception as e:
-        logger.error(f"시스템 프롬프트 생성 오류: {e}")
-        return "너는 투자 분석 에이전트야."
+        logger.warning(f"Metadata extraction failed: {e}")
+        return {"title": "Unknown", "author": "Unknown", "thumbnail": "", "description": ""}
 
-
-# ==================== 방어적 네트워크 클라이언트 ====================
-class NetworkClient:
-    """방어적 네트워크 클라이언트"""
-    
-    def __init__(self, base_url: str, timeout: int = 30):
-        self.base_url = base_url
-        self.timeout = timeout
-        self.session: Optional[object] = None
-    
-    async def __aenter__(self):
-        """비동기 컨텍스트 매니저 진입"""
-        import aiohttp
-        self.session = aiohttp.ClientSession(
-            timeout=aiohttp.ClientTimeout(total=self.timeout)
-        )
-        return self
-    
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """비동기 컨텍스트 매니저 종료"""
-        if self.session:
-            await self.session.close()
-    
-    async def post_with_retry(self, endpoint: str, payload: dict, 
-                              max_retries: int = Config.MAX_RETRIES) -> Optional[dict]:
-        """재시도 로직이 포함된 POST 요청"""
-        import aiohttp
-        
-        last_error = None
-        
-        for attempt in range(max_retries):
-            try:
-                async with self.session.post(
-                    f"{self.base_url}{endpoint}",
-                    json=payload
-                ) as resp:
-                    if resp.status == 200:
-                        return await resp.json()
-                    elif resp.status == 404:
-                        logger.error(f"엔드포인트를 찾을 수 없음: {endpoint}")
-                        return None
-                    elif resp.status >= 500:
-                        logger.warning(f"서버 오류 ({resp.status}), 재시도 {attempt + 1}/{max_retries}")
-                        last_error = f"Server error: {resp.status}"
-                    else:
-                        logger.error(f"HTTP 오류: {resp.status}")
-                        return None
-                        
-            except aiohttp.ClientConnectorError as e:
-                last_error = f"연결 실패: {e}"
-                logger.warning(f"Worker 연결 실패, 재시도 {attempt + 1}/{max_retries}")
-            except asyncio.TimeoutError:
-                last_error = "요청 타임아웃"
-                logger.warning(f"타임아웃, 재시도 {attempt + 1}/{max_retries}")
-            except Exception as e:
-                last_error = f"예상치 못한 오류: {e}"
-                logger.error(f"예외 발생: {e}")
-            
-            # 재시도 전 대기
-            if attempt < max_retries - 1:
-                await asyncio.sleep(Config.RETRY_DELAY)
-        
-        logger.error(f"최대 재시도 횟수 초과: {last_error}")
-        return None
-    
-    async def health_check(self) -> bool:
-        """헬스 체크"""
-        try:
-            async with self.session.get(f"{self.base_url}/health") as resp:
-                return resp.status == 200
-        except Exception:
-            return False
-
-
-# ==================== 테스트 워크플로우 ====================
-async def test_workflow():
-    """전체 워크플로우 테스트 (방어적 코딩 적용)"""
-    print("=" * 60)
-    print("Nexus 시스템 테스트 시작")
-    print("=" * 60)
-    
-    # 1. 매니페스트 로드
-    print("\n[1] 매니페스트 로드...")
-    manifest = load_manifest()
-    print(f"    버전: {manifest.get('version')}")
-    print(f"    이름: {manifest.get('name')}")
-    
-    # 2. 시스템 프롬프트 구성
-    print("\n[2] 시스템 프롬프트 구성...")
-    system_prompt = build_system_prompt(manifest)
-    total_tools = len(manifest.get('tools', {}).get('skills', [])) + len(manifest.get('tools', {}).get('mcp', []))
-    print(f"    사용 가능한 도구: {total_tools}개")
-    
-    # 3. Worker URL 확인
-    print("\n[3] Worker 연결 설정...")
-    worker_url = get_worker_url()
-    print(f"    Worker URL: {worker_url}")
-    os.environ["WORKER_URL"] = worker_url
-    
-    # 4. ManagerCore import 및 초기화
-    print("\n[4] ManagerCore 초기화...")
-    from manager.manager_core import ManagerCore
-    
+def get_yt_transcript(video_id: str):
+    from youtube_transcript_api import YouTubeTranscriptApi
     try:
-        manager = ManagerCore()
-        print("    ✓ ManagerCore 준비 완료")
+        ytt_api = YouTubeTranscriptApi()
+        transcript_list = ytt_api.list(video_id)
+        transcript = transcript_list.find_transcript(['ko', 'en'])
+        data = transcript.fetch()
+        text = " ".join([getattr(d, 'text', d.get('text', '') if isinstance(d, dict) else '') for d in data])
+        return {"text": text, "language": transcript.language_code, "method": "api"}
     except Exception as e:
-        print(f"    ❌ ManagerCore 초기화 실패: {e}")
-        logger.error(f"ManagerCore 초기화 오류: {e}")
-        return
-    
-    # 5. Worker 연결 확인
-    print("\n[5] Worker 연결 확인...")
+        logger.error(f"YouTube API failed for {video_id}: {e}")
+        return {"error": str(e)}
+
+async def transcribe_audio_local(url: str):
     try:
-        async with NetworkClient(worker_url, timeout=5) as client:
-            if await client.health_check():
-                print("    ✓ Worker 연결 정상")
-            else:
-                print("    ⚠ Worker 응답 없음 (계속 진행)")
+        import whisper
+        audio_file = f"temp_server_audio_{os.getpid()}"
+        ydl_opts = {
+            'format': 'bestaudio/best',
+            'postprocessors': [{'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3', 'preferredquality': '128'}],
+            'outtmpl': audio_file, 'quiet': True, 'no_warnings': True,
+        }
+        mp3_path = f"{audio_file}.mp3"
+        await asyncio.to_thread(lambda: yt_dlp.YoutubeDL(ydl_opts).download([url]))
+        if not os.path.exists(mp3_path): return {"error": "Audio download failed"}
+        result = await asyncio.to_thread(lambda: whisper.load_model("base").transcribe(mp3_path))
+        if os.path.exists(mp3_path): os.remove(mp3_path)
+        return {"text": result["text"], "language": result.get("language", "unknown"), "method": "whisper"}
     except Exception as e:
-        print(f"    ⚠ Worker 연결 확인 실패: {e}")
-        logger.warning(f"Worker 헬스 체크 실패: {e}")
-    
-    # 6. 테스트 질문 실행
-    user_input = "현재 아마존 투자는 어때보여?"
-    print(f"\n[6] 테스트 질문 실행...")
-    print(f"    질문: {user_input}")
-    print("-" * 60)
-    
-    result = await safe_execute_workflow(manager, user_input, "test_user")
-    
-    # 결과 출력
-    print("\n[결과]")
-    print("-" * 60)
-    
-    if result.get("error"):
-        print(f"❌ 오류: {result['error']}")
-    else:
-        # 적용된 원칙
-        principles = result.get("applied_principles", [])
-        if principles:
-            print(f"\n📋 적용된 원칙 ({len(principles)}개):")
-            for p in principles:
-                print(f"   - {p.get('content', '')[:80]}...")
-        
-        # 워커 결과
-        worker_result = result.get("worker_result")
-        if worker_result:
-            print(f"\n🔧 Worker 결과:")
-            print(f"   상태: {worker_result.get('status', 'unknown')}")
-        
-        # 워커 요약
-        worker_summary = result.get("worker_summary")
-        if worker_summary:
-            print(f"\n📝 Worker 요약:")
-            print(f"   {worker_summary[:200]}...")
-        
-        # 최종 리포트
-        final_report = result.get("final_report")
-        if final_report:
-            print(f"\n💎 최종 투자 리포트:")
-            print("-" * 60)
-            print(final_report)
-            print("-" * 60)
-        else:
-            print("\n⚠ 최종 리포트 없음 (Worker 연결 실패 가능)")
-        
-        # ---------------- 피드백 루프 ----------------
-        if final_report and hasattr(manager, "process_feedback"):
-            print("\n" + "=" * 60)
-            feedback = input("[피드백] 이 리포트에서 개선할 점이나 선호하는 방식을 알려주세요 (엔터시 건너뜀): ")
-            if feedback.strip():
-                print("    피드백을 분석하여 에이전트 성향을 업데이트합니다...")
-                # Task ID는 임의 생성 (실제 환경에서는 state의 task_id 사용)
-                task_id = f"test_task_{os.urandom(2).hex()}"
-                success = manager.process_feedback("test_user", task_id, feedback)
-                if success:
-                    print("    ✓ 사용자 성향 최적화 완료!")
-                else:
-                    print("    ❌ 성향 최적화 실패")
-        # ----------------------------------------------
-    
-    print("\n" + "=" * 60)
-    print("테스트 완료")
-    print("=" * 60)
+        logger.error(f"Whisper local error: {e}")
+        return {"error": str(e)}
 
+# ==================== 엔드포인트 ====================
 
-async def safe_execute_workflow(manager, user_input: str, user_id: str) -> dict:
-    """안전한 워크플로우 실행 (예외 처리 포함)"""
+@app.get("/api/models/core")
+@app.get("/api/models/manager") # Alias for compatibility
+async def get_core_models():
     try:
-        result = await asyncio.wait_for(
-            manager.run(user_input=user_input, user_id=user_id),
-            timeout=Config.WORKER_TIMEOUT + Config.OLLAMA_TIMEOUT
-        )
+        resp = ollama.list()
+        models_data = getattr(resp, 'models', resp.get("models", resp) if isinstance(resp, dict) else resp)
+        return [m.get("model") if isinstance(m, dict) else getattr(m, 'model', str(m)) for m in models_data]
+    except:
+        return ["gemma2:27b", "gemma2:9b"]
+
+@app.get("/api/models/worker")
+async def get_worker_models():
+    """PC Ollama의 모델 목록 직접 조회 (/api/tags)"""
+    worker_url = NexusConfig.get_worker_url()
+    try:
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
+            # Ollama의 모델 목록 엔드포인트는 /api/tags 입니다.
+            async with session.get(f"{worker_url}/api/tags") as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    models = data.get("models", [])
+                    return [m.get("name") for m in models]
+                return ["gemma2:9b (PC)"]
+    except Exception as e:
+        logger.error(f"Worker models lookup failed: {e}")
+        return ["gemma2:9b (Fallback)"]
+
+@app.post("/api/config/model")
+async def update_model_config(req: ModelConfigRequest):
+    try:
+        manifest = NexusConfig.load_manifest()
+        if "models" not in manifest: manifest["models"] = {}
+        manifest["models"][req.component] = req.model
+        with open(NexusConfig.MANIFEST_PATH, "w", encoding="utf-8") as f:
+            json.dump(manifest, f, indent=2, ensure_ascii=False)
+        NexusConfig._manifest = None
+        
+        # 주기가 변경되었으므로 자율 루프 재시작
+        autonomous_agent.stop()
+        autonomous_agent.start()
+        
+        return {"status": "success", "message": f"모니터링 주기가 {req.interval}초로 업데이트되었습니다."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/research")
+async def run_research(req: ResearchRequest):
+    """서버에서 모든 도구를 직접 실행하는 연구 워크플로우 시작"""
+    try:
+        result = await manager.run(req.query)
         return result
-    except asyncio.TimeoutError:
-        logger.error("워크플로우 타임아웃")
-        return {
-            "error": "작업 시간이 초과되었습니다. RTX 서버 연결을 확인해 주세요.",
-            "applied_principles": [],
-            "worker_result": None,
-            "final_report": None
-        }
-    except ConnectionError as e:
-        logger.error(f"연결 오류: {e}")
-        return {
-            "error": f"RTX 서버에 연결할 수 없습니다: {e}",
-            "applied_principles": [],
-            "worker_result": None,
-            "final_report": None
-        }
     except Exception as e:
-        logger.error(f"예상치 못한 오류: {e}")
-        import traceback
-        traceback.print_exc()
-        return {
-            "error": f"시스템 오류가 발생했습니다: {e}",
-            "applied_principles": [],
-            "worker_result": None,
-            "final_report": None
-        }
+        logger.error(f"Research error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/learnings")
+async def get_learnings():
+    return {"status": "success", "learnings": memory.get_all_learnings()}
 
-def main():
-    """메인 함수"""
-    # 중앙 설정 초기화
-    url = NexusConfig.get_worker_url()
-    rtx_ip = url.split("//")[-1].split(":")[0]
-    os.environ["RTX_IP"] = rtx_ip
-    print(f"시스템 설정 완료 (RTX IP: {rtx_ip})")
-    
-    # 비동기 테스트 실행
+@app.post("/api/youtube/summarize")
+async def youtube_summarize(req: YouTubeSummarizeRequest):
+    """유튜브 요약 (분산 LLM 활용)"""
     try:
-        asyncio.run(test_workflow())
-    except KeyboardInterrupt:
-        print("\n사용자에 의해 중단됨")
+        video_id = extract_video_id(req.url)
+        if not video_id: return {"status": "error", "message": "유효하지 않은 URL"}
+        
+        metadata = get_yt_metadata(req.url)
+        result = get_yt_transcript(video_id)
+        if "error" in result: result = await transcribe_audio_local(req.url)
+        if "error" in result: return {"status": "error", "message": "자막 추출 실패"}
+        
+        transcript = result["text"]
+        chunks = [transcript[i:i+4000] for i in range(0, len(transcript), 4000)]
+        
+        # 1. 고속 작업: Worker LLM을 사용하여 파편화된 요약/추출 수행
+        extracted_facts = []
+        for chunk in chunks:
+            # use_remote=True (Worker)
+            fact = await manager.llm.chat("너는 정보 추출가야. 핵심 내용만 요약해줘.", chunk, use_remote=(req.model_type=="worker"))
+            extracted_facts.append(fact)
+        
+        combined_facts = "\n\n".join(extracted_facts)
+        
+        # 2. 깊은 추론: Manager LLM을 사용하여 최종 리포트 구성
+        writer_system = "너는 유튜브 스크립트 요약 전문가야. 마크다운 구조로 한국어 요약해줘."
+        writer_prompt = f"다음 내용을 바탕으로 요약해줘:\n{combined_facts}"
+        
+        final_summary = await manager.llm.chat(writer_system, writer_prompt, use_remote=False)
+        
+        return {
+            "status": "success",
+            "metadata": metadata,
+            "summary": final_summary
+        }
     except Exception as e:
-        logger.error(f"메인 실행 오류: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"YouTube summarize error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/", response_class=HTMLResponse)
+async def get_index():
+    index_file = STATIC_DIR / "index.html"
+    if not index_file.exists(): return "<h1>Nexus Dashboard</h1>"
+    with open(index_file, "r", encoding="utf-8") as f: return f.read()
+
+@app.get("/api/status")
+async def get_status():
+    manifest = NexusConfig.load_manifest()
+    return {
+        "status": "online",
+        "core_model": NexusConfig.get_model("core"),
+        "worker_model": NexusConfig.get_model("worker"),
+        "worker_url": NexusConfig.get_worker_url(),
+        "mode": "consolidated"
+    }
+
+@app.get("/api/tools")
+async def get_active_tools():
+    manifest = NexusConfig.load_manifest()
+    return manifest.get("tools", {})
+
+@app.post("/api/chat")
+async def chat(req: ChatRequest):
+    try:
+        return await manager.run(req.query, req.user_id)
+    except Exception as e:
+        logger.error(f"Chat error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
-    main()
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8080)

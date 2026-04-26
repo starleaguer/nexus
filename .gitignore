@@ -1,3 +1,21 @@
+# Environments
 .venv/
-__pycache__/
 .env
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Data & Databases (Local only)
+data/*.db
+data/vector_store/
+tmp/
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+
+# User-specific test scripts
+local_test.py

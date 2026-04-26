@@ -1,7 +1,7 @@
 [project]
 name = "nexus"
-version = "0.1.0"
-description = "Add your description here"
+version = "0.2.0"
+description = "FinCore Agent"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -44,11 +44,11 @@ dependencies = [
 
 [tool.uv.workspace]
 members = [
-    "temp_tools/tradingview-mcp",
-    "temp_tools/borsa-mcp",
-    "temp_tools/financial-datasets-mcp",
-    "temp_tools/maverick-mcp",
-    "temp_tools/kospi-kosdaq-stock-server",
+    "skills/tradingview_mcp/src",
+    "skills/borsa_mcp/src",
+    "skills/financial_datasets_mcp/src",
+    "skills/maverick_mcp/src",
+    "skills/kospi_kosdaq_stock_server/src",
 ]
 
 [tool.uv.sources]
@@ -57,5 +57,3 @@ borsa-mcp = { workspace = true }
 mcp-server = { workspace = true }
 maverick-mcp = { workspace = true }
 kospi-kosdaq-stock-server = { workspace = true }
-
-
