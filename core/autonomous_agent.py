@@ -12,6 +12,7 @@ class AutonomousAgent:
         self.manager = manager_core
         self.is_running = False
         self._task = None
+        self.logs = [] # 활동 로그 저장용
         
     def start(self):
         """백그라운드 루프 시작"""
@@ -42,9 +43,11 @@ class AutonomousAgent:
                 logger.info("[Autonomous] 정기 모니터링 시작...")
                 
                 # ManagerCore를 자율 모드로 실행
+                self._add_log("정기 모니터링 시작")
                 result = await self.manager.run(sys_prompt, user_id="system", is_autonomous=True)
                 
                 if result and result.get("final_report"):
+                    self._add_log("모니터링 리포트 생성 완료")
                     logger.info("[Autonomous] 정기 모니터링 리포트 생성 및 저장 완료.")
                 
                 if not self.is_running: break
@@ -52,5 +55,20 @@ class AutonomousAgent:
             except asyncio.CancelledError:
                 break
             except Exception as e:
+                self._add_log(f"오류 발생: {str(e)}")
                 logger.error(f"[Autonomous] 루프 실행 중 오류: {e}")
+
+    def _add_log(self, message: str):
+        """활동 로그에 시간과 함께 메시지 추가"""
+        log_entry = {
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "message": message
+        }
+        self.logs.append(log_entry)
+        if len(self.logs) > 50: # 최근 50개만 유지
+            self.logs.pop(0)
+            
+    def get_logs(self):
+        """저장된 로그 반환"""
+        return self.logs
 

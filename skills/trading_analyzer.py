@@ -10,23 +10,25 @@ from typing import Dict, Any, Optional
 logger = logging.getLogger("TradingAnalyzerSkill")
 
 # 프로젝트 루트 및 tmp 경로 추가 (kis_v2, make_korea_db 임포트용)
-PROJECT_ROOT = Path(__file__).parent.parent.parent
+PROJECT_ROOT = Path(__file__).parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 TMP_DIR = PROJECT_ROOT / "tmp"
 if str(TMP_DIR) not in sys.path:
+    sys.path.insert(0, str(TMP_DIR))
+
 # 의존성 임포트
 try:
-    import kis_v2
-    import make_korea_db
+    import tmp.kis_v2 as kis_v2
+    import tmp.make_korea_db as make_korea_db
     import FinanceDataReader as fdr
     import pandas as pd
 except ImportError as e:
     logger.error(f"필수 라이브러리 또는 모듈을 임포트할 수 없습니다: {e}")
 
 import ollama
-from shared.config_loader import NexusConfig
+from core.config_loader import NexusConfig
 
 class TradingAnalyzerSkill:
     """
@@ -145,28 +147,8 @@ class TradingAnalyzerSkill:
             if "{" in content:
                 data = json.loads(content[content.find("{"):content.rfind("}")+1])
                 return data.get("action"), data.get("target")
-        except:
-            pass
-        return None, None
-
-def run(params: Dict[str, Any]) -> Dict[str, Any]:
-    return TradingAnalyzerSkill().run(params)
-ction": "price", "target": "삼성전자"}}
-        """
-        
-        try:
-            response = ollama.chat(
-                model=model,
-                messages=[{"role": "user", "content": prompt}]
-            )
-            result_text = response.get("message", {}).get("content", "")
-            if "{" in result_text and "}" in result_text:
-                json_str = result_text[result_text.find("{"):result_text.rfind("}")+1]
-                extracted = json.loads(json_str)
-                return extracted.get("action"), extracted.get("target")
         except Exception as e:
             logger.warning(f"의도 분석 실패: {e}")
-        
         return None, None
 
 def run(params: Dict[str, Any]) -> Dict[str, Any]:

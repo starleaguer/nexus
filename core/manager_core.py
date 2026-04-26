@@ -47,6 +47,7 @@ class AgentState(dict):
     user_input: str
     user_id: str
     selected_tool: Optional[str]
+    selected_model: Optional[str]
     tool_params: Optional[Dict[str, Any]]
     worker_result: Optional[Dict[str, Any]]
     worker_summary: Optional[str]
@@ -65,42 +66,62 @@ class OllamaClient:
         self.local_model = model or NexusConfig.get_model("manager")
         self.remote_model = NexusConfig.get_model("worker")
         self.remote_url = remote_url or NexusConfig.get_worker_url()
+        self.worker_available = True # 기본값은 가용한 것으로 가정
     
-    async def chat(self, system: str, user: str, use_remote: bool = False, timeout: int = None) -> str:
+    async def check_health(self) -> bool:
+        """원격 워커 연결 상태를 확인합니다."""
+        try:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as session:
+                async with session.get(f"{self.remote_url}/api/tags") as resp:
+                    self.worker_available = (resp.status == 200)
+                    return self.worker_available
+        except:
+            self.worker_available = False
+            return False
+
+    async def chat(self, system: str, user: str, use_remote: bool = False, timeout: int = None, model: str = None) -> str:
         """채팅 응답 생성 (Fast tasks use remote worker, Deep tasks use local manager)"""
         actual_timeout = timeout or NexusConfig.get_timeout("ollama", 120)
         
+        # 워커가 가용하지 않다면 무조건 로컬 사용
+        if use_remote and not self.worker_available:
+            logger.info("📡 Worker offline, forcing local fallback.")
+            use_remote = False
+            
         if use_remote:
-            return await self._chat_remote(system, user, actual_timeout)
+            return await self._chat_remote(system, user, actual_timeout, model=model)
         else:
-            return self._chat_local(system, user, actual_timeout)
+            return self._chat_local(system, user, actual_timeout, model=model)
 
-    def _chat_local(self, system: str, user: str, timeout: int) -> str:
-        """로컬 Ollama 사용 (Deep Reasoning)"""
+    def _chat_local(self, system: str, user: str, timeout: int, model: str = None) -> str:
+        """Local LLM 호출 (ollama library)"""
         import ollama
         try:
-            from ollama import Client
-            client = Client(timeout=timeout)
-            logger.info(f"🧠 [Local LLM] Calling {self.local_model} for deep reasoning...")
-            response = client.chat(
-                model=self.local_model,
+            target_model = model or self.local_model
+            logger.info(f"🏠 [Local LLM] 대화 시작... (Model: {target_model})")
+            resp = ollama.chat(
+                model=target_model,
                 messages=[
                     {"role": "system", "content": system},
                     {"role": "user", "content": user}
-                ]
+                ],
+                options={"num_predict": 4096}
             )
-            return response["message"]["content"]
+            content = resp['message']['content']
+            logger.info(f"--- [Local Response] ---\n{content[:200]}..." if len(content) > 200 else f"--- [Local Response] ---\n{content}")
+            return content
         except Exception as e:
             logger.error(f"Local Ollama 오류: {e}")
             return f"로컬 AI 분석 중 오류: {str(e)[:100]}"
 
-    async def _chat_remote(self, system: str, user: str, timeout: int) -> str:
+    async def _chat_remote(self, system: str, user: str, timeout: int, model: str = None) -> str:
         """원격 Worker(PC)의 Ollama API를 직접 호출 (Fast Tasks)"""
-        logger.info(f"⚡ [Remote Ollama] Calling worker at {self.remote_url}...")
+        target_model = model or self.remote_model
+        logger.info(f"⚡ [Remote Ollama] Calling worker at {self.remote_url} (Model: {target_model})...")
         try:
             async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout)) as session:
                 payload = {
-                    "model": self.remote_model,
+                    "model": target_model,
                     "messages": [
                         {"role": "system", "content": system},
                         {"role": "user", "content": user}
@@ -111,7 +132,9 @@ class OllamaClient:
                 async with session.post(f"{self.remote_url}/api/chat", json=payload) as resp:
                     if resp.status == 200:
                         data = await resp.json()
-                        return data["message"]["content"]
+                        content = data["message"]["content"]
+                        logger.info(f"--- [LLM Response] ---\n{content[:200]}..." if len(content) > 200 else f"--- [LLM Response] ---\n{content}")
+                        return content
                     else:
                         error_text = await resp.text()
                         logger.warning(f"Remote LLM failed ({resp.status}): {error_text}. Falling back to local.")
@@ -120,18 +143,18 @@ class OllamaClient:
             logger.error(f"Remote LLM connection error: {e}. Falling back to local.")
             return self._chat_local(system, user, timeout)
 
-    async def summarize_result(self, raw_result: Dict[str, Any]) -> str:
+    async def summarize_result(self, raw_result: Dict[str, Any], model: str = None) -> str:
         """작업 결과를 요약 (Fast task -> Remote)"""
         system = "너는 작업 실행 결과를 핵심만 요약하는 비서야."
         user = f"다음 결과를 요약해줘:\n{json.dumps(raw_result, ensure_ascii=False, indent=2)}"
-        return await self.chat(system, user, use_remote=True)
+        return await self.chat(system, user, use_remote=True, model=model)
     
     async def analyze_intent(self, user_input: str, principles: List[Dict[str, Any]], 
                        user_profile: Optional[Dict[str, Any]] = None,
                        research_history: List[Dict[str, Any]] = None) -> Dict[str, Any]:
         """의도 분석 (Fast task -> Remote)"""
         principles_text = "\n".join([f"- {p.get('content', '')}" for p in principles]) if principles else "없음"
-        skills = NexusConfig.load_manifest().get("tools", {}).get("skills", [])
+        skills = NexusConfig.get_discovered_skills()
         mcp_tools = NexusConfig.load_manifest().get("tools", {}).get("mcp", [])
         tools_text = "\n".join([f"- {t.get('name')}: {t.get('description')}" for t in skills + mcp_tools])
         
@@ -158,6 +181,7 @@ JSON 응답 형식:
 {{
     "intent": "현재 분석 상황",
     "required_tool": "다음에 호출할 도구 이름 (없으면 null)",
+    "required_model": "사용할 모델 이름 (예: gemma2:9b, llama3.1 등)",
     "params": {{"query": "파라미터"}},
     "is_finished": true_또는_false,
     "thought": "상세 분석 계획"
@@ -167,12 +191,22 @@ JSON 응답 형식:
         
         user = f"사용자 질문: {user_input}\n위 질문을 분석하여 JSON 형식으로 응답해줘."
         
+        logger.info(f"🔍 [Thinking] 의도 분석 중... (Input: {user_input[:50]}...)")
         result_text = await self.chat(system, user, use_remote=True)
         
         try:
             if "{" in result_text and "}" in result_text:
                 json_str = result_text[result_text.find("{"):result_text.rfind("}")+1]
-                return json.loads(json_str)
+                analysis = json.loads(json_str)
+                
+                # AI의 '생각'을 터미널에 출력
+                thought = analysis.get("thought", "생각 중...")
+                tool = analysis.get("required_tool", "None")
+                model = analysis.get("required_model", "Default")
+                logger.info(f"💭 [AI Thought]: {thought}")
+                logger.info(f"🎯 [Next Action]: {tool} (Model: {model})")
+                
+                return analysis
         except:
             logger.warning("의도 분석 JSON 파싱 실패")
         
@@ -240,6 +274,7 @@ class ManagerCore:
         
         result = await self.llm.analyze_intent(user_input, principles, user_profile, research_history)
         state["selected_tool"] = result.get("required_tool")
+        state["selected_model"] = result.get("required_model")
         state["tool_params"] = result.get("params", {})
         state["is_finished"] = result.get("is_finished", False)
         
@@ -248,12 +283,20 @@ class ManagerCore:
     async def execute_tool_node(self, state: AgentState) -> AgentState:
         """모든 도구를 서버 로컬에서 직접 실행"""
         tool_name = state.get("selected_tool")
+        selected_model = state.get("selected_model")
         params = state.get("tool_params", {})
         
+        # 도구 이름이 리스트로 들어오는 경우 방어 로직
+        if isinstance(tool_name, list) and len(tool_name) > 0:
+            tool_name = tool_name[0]
+        
+        if not tool_name: return state
+
         logger.info(f"🛠️ Executing tool locally: {tool_name}")
         try:
             raw_result = self._execute_locally(tool_name, params)
-            summary = await self.llm.summarize_result(raw_result)
+            # 결과 요약 시 AI가 선택한 모델 사용
+            summary = await self.llm.summarize_result(raw_result, model=selected_model)
             
             state["worker_result"] = raw_result
             state["worker_summary"] = summary

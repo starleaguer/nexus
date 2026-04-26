@@ -8,7 +8,7 @@ PROJECT_ROOT = Path(__file__).parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
     
-MCP_ROOT = PROJECT_ROOT / "temp_tools" / "maverick-mcp"
+MCP_ROOT = Path(__file__).parent / "src"
 if str(MCP_ROOT) not in sys.path:
     sys.path.insert(0, str(MCP_ROOT))
 

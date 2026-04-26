@@ -13,7 +13,7 @@ def run(params: Dict[str, Any]) -> Dict[str, Any]:
     logger.info(f"Chrome MCP Server 호출됨 (query: {query})")
     
     # 이 도구는 Node.js 기반입니다. 
-    # npx나 node를 통해 temp_tools/mcp-chrome/ 디렉토리의 서버를 실행해야 합니다.
+    # npx나 node를 통해 skills/mcp_chrome/src/ 디렉토리의 서버를 실행해야 합니다.
     
     return {
         "status": "success",

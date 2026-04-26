@@ -1,134 +1,77 @@
 {
   "version": "1.0.0",
   "name": "nexus",
-  "description": "\ubd84\uc0b0 AI \uc791\uc5c5 \uad00\ub9ac \uc2dc\uc2a4\ud15c",
+  "description": "분산 AI 기반 지능형 투자 분석 및 작업 자동화 시스템",
   "models": {
-    "worker": "gemma4:latest",
-    "manager": "gemma4:26b"
+    "worker": "gemma4:e4b",
+    "manager": "gemma4:e4b"
   },
   "tools": {
-    "skills": [
-      {
-        "name": "nexus_architect",
-        "description": "\uc2dc\uc2a4\ud15c \uc790\uccb4 \ucf54\ub4dc\ub97c \uc77d\uace0, LLM\uc744 \ud1b5\ud574 \uc218\uc815\uc548\uc744 \uc0dd\uc131 \ubc0f \uc790\uccb4 \uac80\uc99d(Self-Review)\ud55c \ub4a4 \uc548\uc804\ud558\uac8c \ud30c\uc77c\uc5d0 \ub36e\uc5b4\uc4f0\ub294 Auto-Coder \uc2a4\ud0ac",
-        "entry": "skills/nexus_architect.py",
-        "capabilities": [
-          "\uc2dc\uc2a4\ud15c \uc18c\uc2a4 \ucf54\ub4dc \uc218\uc815",
-          "\ucf54\ub4dc \uc0dd\uc131 \ubc0f \ubc18\uc601",
-          "\ud30c\uc77c \ubc31\uc5c5 \ubc0f \uc4f0\uae30",
-          "\uc790\uccb4 \ubcf4\uc548 \uac80\uc218 \ubc0f \uac80\uc99d"
-        ]
-      },
-      {
-        "name": "market_flow",
-        "description": "\uc2dc\uc7a5 \ud750\ub984 \ubd84\uc11d \uc2a4\ud0ac",
-        "entry": "skills/market_flow.py",
-        "capabilities": [
-          "market_analysis",
-          "trend_detection",
-          "sector_analysis",
-          "volume_analysis"
-        ]
-      },
-      {
-        "name": "youtube_summarizer",
-        "description": "\uc720\ud29c\ube0c \uc601\uc0c1 URL\uc744 \ubc1b\uc544 \uc790\ub9c9 \ucd94\ucd9c \ub610\ub294 Whisper \uc74c\uc131 \uc778\uc2dd\uc744 \ud1b5\ud574 \ub0b4\uc6a9\uc744 \uc694\uc57d\uc6a9 \ud14d\uc2a4\ud2b8\ub85c \ubc18\ud658\ud558\ub294 \uc2a4\ud0ac",
-        "entry": "skills/youtube_summarizer.py",
-        "capabilities": [
-          "youtube_transcript_extraction",
-          "whisper_voice_to_text",
-          "metadata_extraction"
-        ]
-      },
-      {
-        "name": "web_researcher",
-        "description": "\uc778\ud130\ub137 \uc6f9\uc0ac\uc774\ud2b8 \uac80\uc0c9 \ubc0f \ubb38\uc11c \ubcf8\ubb38 \uc218\uc9d1, \ucd5c\uc2e0 \ub274\uc2a4 \uc790\ub8cc \uc218\uc9d1 \uc804\ubb38 \uc2a4\ud0ac",
-        "entry": "skills/web_researcher.py",
-        "capabilities": [
-          "web_search",
-          "content_extraction",
-          "news_collection",
-          "market_research"
-        ]
-      },
-      {
-        "name": "trading_analyzer",
-        "description": "\ud55c\uad6d \uc8fc\uc2dd \uc2dc\uc138 \uc870\ud68c, \uc7ac\ubb34 \uc694\uc57d, \ucc28\ud2b8 \ubd84\uc11d \ubc0f \ub370\uc774\ud130\ubca0\uc774\uc2a4 \uad00\ub9ac \uc2a4\ud0ac",
-        "entry": "skills/trading_analyzer.py",
-        "capabilities": [
-          "stock_search",
-          "price_lookup",
-          "financial_analysis",
-          "trend_analysis",
-          "db_management"
-        ]
-      }
-    ],
     "mcp": [
       {
         "name": "tradingview_mcp",
-        "description": "\uc2e4\uc2dc\uac04 \uc554\ud638\ud654\ud3d0 \ubc0f \uc8fc\uc2dd \uc2a4\ud06c\ub9ac\ub2dd, 30\uac1c \uc774\uc0c1\uc758 \uae30\uc220\uc801 \uc9c0\ud45c, \ubc31\ud14c\uc2a4\ud305 \ubc0f \uba40\ud2f0 \uac70\ub798\uc18c(Binance, KuCoin \ub4f1) \ub370\uc774\ud130\ub97c \uc81c\uacf5\ud558\ub294 MCP \uc11c\ubc84 \uae30\ubc18 \ud2b8\ub808\uc774\ub529 \uc778\ud154\ub9ac\uc804\uc2a4 \ud504\ub808\uc784\uc6cc\ud06c",
-        "entry": "skills/tradingview_mcp.py",
+        "description": "TradingView 기반 실시간 암호화폐 및 주식 기술적 지표 분석 MCP 서버",
+        "entry": "skills/tradingview_mcp/__init__.py",
         "capabilities": [
           "Real-time Crypto & Stock Screening",
-          "Advanced Technical Indicators (Bollinger Bands, Candlestick Patterns, etc.)",
-          "Backtesting with Sharpe Ratio calculation",
-          "Multi-exchange data integration (Binance, KuCoin, Bybit)",
-          "Live Market Sentiment analysis"
+          "Advanced Technical Indicators",
+          "Backtesting with Sharpe Ratio",
+          "Multi-exchange data integration",
+          "Live Market Sentiment"
         ],
         "repo_url": "https://github.com/atilaahmettaner/tradingview-mcp"
       },
       {
         "name": "borsa_mcp",
-        "description": "Borsa \u0130stanbul(BIST) \ubc0f \ubbf8\uad6d \uc8fc\uc2dd, TEFAS \ud380\ub4dc, \uc554\ud638\ud654\ud3d0, \uac70\uc2dc \uacbd\uc81c \ub370\uc774\ud130\ub97c \uc81c\uacf5\ud558\ub294 MCP \uc11c\ubc84",
-        "entry": "skills/borsa_mcp.py",
+        "description": "BIST, 미국 주식, 암호화폐 및 매크로 경제 데이터 제공 MCP 서버",
+        "entry": "skills/borsa_mcp/__init__.py",
         "capabilities": [
-          "BIST \ubc0f US \uc8fc\uc2dd \uc2dc\uc7a5 \ub370\uc774\ud130 \uc870\ud68c",
-          "\uae30\uc220\uc801 \uc9c0\ud45c \uc2a4\uce90\ub2dd (RSI, MACD, Supertrend \ub4f1)",
-          "\ud380\ub4dc(TEFAS) \uc131\ub2a5 \ubc0f \ud3ec\ud2b8\ud3f4\ub9ac\uc624 \ube44\uad50",
-          "\uc554\ud638\ud654\ud3d0, \uc678\ud658 \ubc0f \uc6d0\uc790\uc7ac \uac00\uaca9 \ub370\uc774\ud130",
-          "\uac70\uc2dc \uacbd\uc81c \ub370\uc774\ud130(\uc778\ud50c\ub808\uc774\uc158 \ub4f1) \ubc0f \uacbd\uc81c \uce98\ub9b0\ub354"
+          "BIST & US Market Data",
+          "Technical Indicator Scanning",
+          "Fund Performance Comparison",
+          "Crypto & FX Data",
+          "Macro Economic Calendar"
         ],
         "repo_url": "https://github.com/saidsurucu/borsa-mcp"
       },
       {
         "name": "financial_datasets_mcp",
-        "description": "Financial Datasets API\ub97c \ud1b5\ud574 \uc8fc\uc2dd \ubc0f \uc554\ud638\ud654\ud3d0\uc758 \uc7ac\ubb34\uc81c\ud45c(\uc190\uc775\uacc4\uc0b0\uc11c, \ub300\ucc28\ub300\uc870\ud45c \ub4f1), \uac00\uaca9 \ubcc0\ub3d9, \ub274\uc2a4 \ub4f1 \uc2dc\uc7a5\uc758 \uad6c\uc870\uc801 \ub370\uc774\ud130\ub97c \uc81c\uacf5\ud558\ub294 MCP \uc11c\ubc84",
-        "entry": "skills/financial_datasets_mcp.py",
+        "description": "기업 재무제표 및 구조화된 금융 데이터 제공 전문 MCP 서버",
+        "entry": "skills/financial_datasets_mcp/__init__.py",
         "capabilities": [
-          "\uc7ac\ubb34\uc81c\ud45c(\uc190\uc775\uacc4\uc0b0\uc11c, \ub300\ucc28\ub300\uc870\ud45c, \ud604\uae08\ud750\ub984\ud45c) \uc870\ud68c",
-          "\uc8fc\uc2dd \ubc0f \uc554\ud638\ud654\ud3d0\uc758 \uc2e4\uc2dc\uac04/\uacfc\uac70 \uac00\uaca9 \ub370\uc774\ud130 \ud68d\ub4dd",
-          "\uae30\uc5c5 \uad00\ub828 \ub274\uc2a4 \ubc0f \uc554\ud638\ud654\ud3d0 \ud2f0\ucee4 \ub9ac\uc2a4\ud2b8 \uc81c\uacf5"
+          "Financial Statements Lookup",
+          "Real-time/Historical Pricing",
+          "Corporate News & Tickers"
         ],
         "repo_url": "https://github.com/financial-datasets/mcp-server"
       },
       {
         "name": "maverick_mcp",
-        "description": "\uac1c\uc778 \ud22c\uc790\uc790\ub97c \uc704\ud55c \uc804\ubb38 \uc218\uc900\uc758 \uc8fc\uc2dd \ubd84\uc11d \ubc0f \uae30\uc220\uc801 \uc9c0\ud45c \uacc4\uc0b0, \ubc31\ud14c\uc2a4\ud305, \ud3ec\ud2b8\ud3f4\ub9ac\uc624 \ucd5c\uc801\ud654\ub97c \uc9c0\uc6d0\ud558\ub294 MCP \uc11c\ubc84",
-        "entry": "skills/maverick_mcp.py",
+        "description": "포트폴리오 최적화 및 고도화된 백테스팅 지원 투자 분석 MCP 서버",
+        "entry": "skills/maverick_mcp/__init__.py",
         "capabilities": [
-          "Technical Analysis (SMA, EMA, RSI, MACD, Bollinger Bands)",
-          "Backtesting engine using VectorBT",
-          "Stock Screening (S&P 500 based strategies)",
+          "Technical Analysis (RSI, MACD, etc.)",
+          "Backtesting engine (VectorBT)",
+          "Stock Screening",
           "Portfolio Optimization",
-          "Historical and real-time stock data access"
+          "Real-time Data Access"
         ],
         "repo_url": "https://github.com/wshobson/maverick-mcp"
       },
       {
         "name": "kospi_kosdaq_stock_server",
-        "description": "\uad6d\ub0b4 \uc8fc\uc2dd(KOSPI/KOSDAQ)\uc758 \uc2dc\uc138, \uc7ac\ubb34, \uac70\ub798\ub7c9 \ubc0f \ud22c\uc790\uc790\ubcc4 \ub9e4\ub9e4 \ub3d9\ud5a5 \ub370\uc774\ud130\ub97c \uc81c\uacf5\ud558\ub294 MCP \uc11c\ubc84",
-        "entry": "skills/kospi_kosdaq_stock_server.py",
+        "description": "국내 KOSPI/KOSDAQ 특화 시세 및 투자자별 매매 동향 데이터 서버",
+        "entry": "skills/kospi_kosdaq_stock_server/__init__.py",
         "capabilities": [
-          "KOSPI/KOSDAQ \uc2dc\uc138 \uc870\ud68c",
-          "\uc7ac\ubb34 \uc9c0\ud45c(PER/PBR) \uc870\ud68c",
-          "\ud22c\uc790\uc790\ubcc4 \uac70\ub798\ub7c9 \ubd84\uc11d"
+          "KOSPI/KOSDAQ Price Lookup",
+          "Financial Ratios (PER/PBR)",
+          "Investor Trading Volume Analysis"
         ]
       },
       {
         "name": "mcp_chrome",
-        "description": "\ube0c\ub77c\uc6b0\uc800 \uc790\ub3d9\ud654 \ubc0f \uc6f9 \ud398\uc774\uc9c0 \ucf58\ud150\uce20 \ubd84\uc11d, \uc2dc\ub9e8\ud2f1 \uac80\uc0c9 \uae30\ub2a5\uc744 \uc81c\uacf5\ud558\ub294 \ube0c\ub77c\uc6b0\uc800 \uc81c\uc5b4 MCP \uc11c\ubc84",
-        "entry": "skills/mcp_chrome.py",
+        "description": "브라우저 자동화 및 웹 페이지 콘텐츠 시맨틱 분석 지원 MCP 서버",
+        "entry": "skills/mcp_chrome/__init__.py",
         "capabilities": [
           "Browser Automation",
           "Content Extraction",
@@ -137,8 +80,8 @@
       },
       {
         "name": "reddit_mcp_buddy",
-        "description": "Reddit \uac8c\uc2dc\uae00 \uac80\uc0c9 \ubc0f \uc5ec\ub860 \ud2b8\ub80c\ub4dc \ubd84\uc11d \uae30\ub2a5\uc744 \uc81c\uacf5\ud558\ub294 \uc18c\uc15c \ub9ac\uc11c\uce58 MCP \uc11c\ubc84",
-        "entry": "skills/reddit_mcp_buddy.py",
+        "description": "Reddit 게시글 검색 및 소셜 여론 트렌드 분석 MCP 서버",
+        "entry": "skills/reddit_mcp_buddy/__init__.py",
         "capabilities": [
           "Reddit Search",
           "Trend Analysis",
@@ -155,8 +98,6 @@
     "interval": 36000
   },
   "worker": {
-    "mode": "remote",
-    "host": "0.0.0.0",
     "port": 11434,
     "ip": "192.168.219.115"
   },

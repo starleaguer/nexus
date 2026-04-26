@@ -15,7 +15,7 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from manager.manager_core import OllamaClient
+from core.manager_core import OllamaClient
 import logging
 
 logger = logging.getLogger(__name__)
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 class Skill:
     def __init__(self):
         self.llm = OllamaClient() # 매니페스트/환경변수에 설정된 모델 사용 (ManagerCore 재사용)
-        self.target_dir = PROJECT_ROOT / "worker" / "skills"
+        self.target_dir = PROJECT_ROOT / "skills"
 
     def _find_target_files(self, query: str) -> List[Path]:
         """쿼리 분석 또는 단순 검색을 통해 수정 대상 파일을 찾습니다."""
@@ -156,3 +156,6 @@ class Skill:
             "summary": f"총 {len(target_files)}개 파일 중 {success_count}개 성공적으로 업데이트됨.",
             "details": results
         }
+def run(params: Dict[str, Any]) -> Dict[str, Any]:
+    """워커 엔트리포인트"""
+    return Skill().run(params)

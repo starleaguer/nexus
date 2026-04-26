@@ -3,7 +3,7 @@ import logging
 from typing import Dict, Any
 
 import ollama
-from .src.tradingview_mcp.server import combined_analysis
+from tradingview_mcp.server import combined_analysis
 
 # shared_config 로드 
 import sys
@@ -12,7 +12,7 @@ PROJECT_ROOT = Path(__file__).parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
     
-from shared.config_loader import NexusConfig
+from core.config_loader import NexusConfig
 
 logger = logging.getLogger(__name__)
 

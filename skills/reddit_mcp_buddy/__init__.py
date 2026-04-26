@@ -11,7 +11,7 @@ def run(params: Dict[str, Any]) -> Dict[str, Any]:
     logger.info(f"Reddit MCP Buddy 호출됨 (query: {query})")
     
     # 이 도구는 Node.js 기반입니다. 
-    # temp_tools/reddit-mcp-buddy/ 내부의 서버를 실행하는 로직이 필요합니다.
+    # skills/reddit_mcp_buddy/src/ 내부의 서버를 실행하는 로직이 필요합니다.
     
     return {
         "status": "success",

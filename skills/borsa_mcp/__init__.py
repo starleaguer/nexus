@@ -15,13 +15,13 @@ PROJECT_ROOT = Path(__file__).parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
     
-BORSA_MCP_ROOT = PROJECT_ROOT / "temp_tools" / "borsa-mcp"
+BORSA_MCP_ROOT = Path(__file__).parent / "src"
 if str(BORSA_MCP_ROOT) not in sys.path:
     sys.path.insert(0, str(BORSA_MCP_ROOT))
 
 from providers.market_router import MarketRouter
 from models.unified_base import MarketType
-from shared.config_loader import NexusConfig
+from core.config_loader import NexusConfig
 
 logger = logging.getLogger(__name__)
 
