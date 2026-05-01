@@ -8,6 +8,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const tabs = document.querySelectorAll('.tab-content');
     const notification = document.getElementById('notification');
 
+    // Modal Elements
+    const modal = document.getElementById('full-view-modal');
+    const closeModalBtn = modal.querySelector('.close-modal');
+    const modalTitle = document.getElementById('modal-title');
+    const modalInfoBar = document.getElementById('modal-info-bar');
+    const modalTextContent = document.getElementById('modal-text-content');
+    const modalFooter = document.getElementById('modal-footer-actions');
+
     // Tab Switching
     navItems.forEach(item => {
         item.addEventListener('click', (e) => {
@@ -131,53 +139,12 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (err) {
             list.innerHTML = '<div class="loading-spinner">데이터 로드 실패</div>';
         }
-
-        // Load Autonomous Logs
-        const autoList = document.getElementById('autonomous-logs-list');
-        const deleteAutoBtn = document.getElementById('delete-autonomous-btn');
-        autoList.innerHTML = '<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i><span>Loading market insights...</span></div>';
-        deleteAutoBtn.style.display = 'none';
-
-        try {
-            const response = await fetch('/api/autonomous/logs');
-            const data = await response.json();
-
-            autoList.innerHTML = '';
-            if (!data.logs || data.logs.length === 0) {
-                autoList.innerHTML = '<div class="loading-spinner">아직 수집된 시장 동향 로그가 없습니다.</div>';
-            } else {
-                data.logs.forEach(item => {
-                    const card = document.createElement('div');
-                    card.className = 'learning-card';
-                    card.style = 'background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border); border-radius: 12px; padding: 15px; margin-bottom: 15px; border-left: 4px solid #a855f7; position: relative; cursor: pointer;';
-                    card.innerHTML = `
-                        <input type="checkbox" class="auto-log-checkbox" data-id="${item.id}" style="position: absolute; right: 15px; top: 15px; width: 18px; height: 18px; cursor: pointer;">
-                        <div style="font-size: 0.8rem; color: #888; margin-bottom: 8px;">${new Date(item.timestamp).toLocaleString()}</div>
-                        <div style="font-size: 0.95rem; line-height: 1.6; color: #e2e8f0; max-height: 300px; overflow-y: auto; padding-right: 30px;">${formatReport(item.content)}</div>
-                    `;
-                    card.onclick = (e) => {
-                        if (e.target.tagName !== 'INPUT') {
-                            const cb = card.querySelector('.auto-log-checkbox');
-                            cb.checked = !cb.checked;
-                            updateDeleteButton('autonomous');
-                        }
-                    };
-                    card.querySelector('.auto-log-checkbox').onchange = () => updateDeleteButton('autonomous');
-                    autoList.appendChild(card);
-                });
-            }
-        } catch (err) {
-            autoList.innerHTML = '<div class="loading-spinner">시장 동향 로드 실패</div>';
-        }
     }
 
     function updateDeleteButton(type) {
         if (type === 'learnings') {
             const checked = document.querySelectorAll('#learnings-list .log-checkbox:checked').length;
             document.getElementById('delete-learnings-btn').style.display = checked > 0 ? 'block' : 'none';
-        } else {
-            const checked = document.querySelectorAll('#autonomous-logs-list .auto-log-checkbox:checked').length;
-            document.getElementById('delete-autonomous-btn').style.display = checked > 0 ? 'block' : 'none';
         }
     }
 
@@ -200,24 +167,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    document.getElementById('delete-autonomous-btn').addEventListener('click', async () => {
-        const checked = Array.from(document.querySelectorAll('#autonomous-logs-list .auto-log-checkbox:checked')).map(cb => cb.getAttribute('data-id'));
-        if (checked.length === 0) return;
-        if (!confirm(`${checked.length}건의 자율 로그를 삭제하시겠습니까?`)) return;
-
-        try {
-            const res = await fetch('/api/autonomous/logs/delete-bulk', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ids: checked })
-            });
-            const result = await res.json();
-            showNotification(result.message);
-            loadLearnings();
-        } catch (err) {
-            showNotification('삭제 실패');
-        }
-    });
 
     // Tool Hunter
     const researchBtn = document.getElementById('research-btn');
@@ -264,7 +213,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetch('/api/candidates');
             const data = await response.json();
             candidatesList.innerHTML = '';
-            const pending = data.filter(c => c.status === 'pending_approval');
+            
+            // 데이터 구조 호환성 처리 (배열 직접 반환 vs {candidates: []} 객체 반환)
+            const candidatesArray = Array.isArray(data) ? data : (data.candidates || []);
+            const pending = candidatesArray.filter(c => c.status === 'pending_approval');
+            
             if (pending.length === 0) {
                 candidatesList.innerHTML = '<div class="loading-spinner">새로운 후보 도구가 없습니다.</div>';
                 return;
@@ -275,7 +228,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 card.innerHTML = `
                     <div class="card-header">
                         <span class="tool-badge badge-${tool.type}">${tool.type}</span>
-                        <i class="fab fa-github"></i>
+                        ${tool.url ? `<a href="${tool.url}" target="_blank" style="color: #fff; font-size: 1.2rem; transition: color 0.2s;" onmouseover="this.style.color='#a855f7'" onmouseout="this.style.color='#fff'"><i class="fab fa-github"></i></a>` : '<i class="fab fa-github"></i>'}
                     </div>
                     <h3 class="card-title">${tool.tool_name}</h3>
                     <p class="card-desc">${tool.description}</p>
@@ -384,19 +337,53 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('worker-timeout-input').value = statusData.timeouts.worker || 120;
                 document.getElementById('ollama-timeout-input').value = statusData.timeouts.ollama || 120;
             }
-            if (statusData.autonomous) {
-                document.getElementById('autonomous-interval-input').value = statusData.autonomous.interval || 3600;
-            }
 
             const toolsRes = await fetch('/api/tools');
             const toolsData = await toolsRes.json();
+            
+            // Clear lists
             activeSkillsList.innerHTML = '';
-            (toolsData.skills || []).forEach(tool => {
-                activeSkillsList.innerHTML += `<li>${tool.name} <span class="badge-skill">Skill</span></li>`;
-            });
-            (toolsData.mcp || []).forEach(tool => {
-                activeSkillsList.innerHTML += `<li>${tool.name} <span class="badge-mcp">MCP</span></li>`;
-            });
+            const hunterGrid = document.getElementById('hunter-active-tools-grid');
+            if (hunterGrid) hunterGrid.innerHTML = '';
+            
+            const renderToolCard = (tool, type) => {
+                const badgeClass = type === 'skill' ? 'badge-skill' : 'badge-mcp';
+                const icon = type === 'skill' ? 'fa-bolt' : 'fa-plug';
+                
+                let usageHtml = '';
+                if (tool.usage) usageHtml = `<div class="meta-item"><span class="meta-label">💡 When to use</span>${tool.usage}</div>`;
+                else if (tool.capabilities) usageHtml = `<div class="meta-item"><span class="meta-label">✨ Capabilities</span>${Array.isArray(tool.capabilities) ? tool.capabilities.slice(0, 3).join(', ') : tool.capabilities}</div>`;
+
+                let outputHtml = tool.output ? `<div class="meta-item"><span class="meta-label">📦 Output</span>${tool.output}</div>` : '';
+
+                const cardHtml = `
+                    <div class="active-tool-card">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                            <span class="tool-badge ${badgeClass}">${type}</span>
+                            <i class="fas ${icon}" style="opacity: 0.3; font-size: 0.8rem;"></i>
+                        </div>
+                        <h4>${tool.name}</h4>
+                        <div class="desc">${tool.description || 'No description available.'}</div>
+                        ${usageHtml}
+                        ${outputHtml}
+                    </div>
+                `;
+                
+                // Sidebar list (simple)
+                const li = document.createElement('li');
+                li.innerHTML = `${tool.name} <span class="tool-badge ${badgeClass}">${type}</span>`;
+                activeSkillsList.appendChild(li);
+                
+                // Hunter grid (rich)
+                if (hunterGrid) {
+                    const div = document.createElement('div');
+                    div.innerHTML = cardHtml;
+                    hunterGrid.appendChild(div.firstElementChild);
+                }
+            };
+
+            (toolsData.skills || []).forEach(tool => renderToolCard(tool, 'skill'));
+            (toolsData.mcp || []).forEach(tool => renderToolCard(tool, 'mcp'));
         } catch (err) {
             console.error('System info load failed:', err);
             showNotification('❌ 시스템 정보를 불러오지 못했습니다.');
@@ -464,25 +451,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    document.getElementById('save-interval-btn').addEventListener('click', async () => {
-        const interval = parseInt(document.getElementById('autonomous-interval-input').value);
-        if (interval < 60) {
-            showNotification('주기는 최소 60초 이상이어야 합니다.');
-            return;
-        }
-
-        try {
-            showNotification('모니터링 주기 저장 중...');
-            await fetch('/api/config/interval', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ interval: interval })
-            });
-            showNotification('모니터링 주기가 반영되었으며 자율 루프가 재시작되었습니다.');
-        } catch (err) {
-            showNotification('저장 실패');
-        }
-    });
 
     function showNotification(text) {
         notification.innerText = text;
@@ -492,6 +460,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Initial load
     loadActiveTools();
+    loadKnowledgeNotes();
 
     // ==================== YouTube Knowledge Feeder ====================
     let currentSummary = '';
@@ -526,9 +495,56 @@ document.addEventListener('DOMContentLoaded', () => {
 
             document.getElementById('yt-video-link').href = url;
             document.getElementById('yt-video-link').textContent = `youtu.be/${data.video_id} (${data.language || 'Video'})`;
+            const titleEl = document.getElementById('yt-video-title');
+            if (titleEl) titleEl.textContent = data.title || '';
+
+            // 사용된 모델 배지 표시
+            const badge = document.getElementById('yt-model-badge');
+            if (badge && data.selected_model) badge.textContent = `🤖 ${data.selected_model}`;
+
+            // 요약 내용 렌더링
             document.getElementById('yt-summary-content').innerHTML = formatReport(data.summary);
+
+            // 이면 추론 렌더링
+            const insightEl = document.getElementById('yt-insight-content');
+            if (insightEl && data.insight) {
+                insightEl.innerHTML = formatReport(data.insight);
+            }
+
+            // 탭 초기화 (요약 탭 활성)
+            document.querySelectorAll('.yt-tab-btn').forEach(b => {
+                const isActive = b.dataset.target === 'yt-summary-panel';
+                b.style.color = isActive ? 'white' : '#888';
+                b.style.borderBottom = isActive ? '2px solid var(--accent-primary)' : '2px solid transparent';
+                b.classList.toggle('active', isActive);
+            });
+            document.getElementById('yt-summary-panel').style.display = 'block';
+            const insightPanel = document.getElementById('yt-insight-panel');
+            if (insightPanel) insightPanel.style.display = 'none';
+
             document.getElementById('yt-user-comment').value = '';
-            document.getElementById('yt-result-area').style.display = 'block';
+            const resultArea = document.getElementById('yt-result-area');
+            resultArea.style.display = 'block';
+            
+            // 결과 카드 클릭 시 모달 연결
+            const resultCard = resultArea.querySelector('.yt-summary-card');
+            resultCard.style.cursor = 'pointer';
+            resultCard.onclick = () => {
+                const title = data.title || '영상 요약 결과';
+                const info = `
+                    <span><i class="fab fa-youtube"></i> <a href="${url}" target="_blank" style="color:inherit; text-decoration:none;">${url}</a></span>
+                    <span><i class="fas fa-microchip"></i> ${data.selected_model || 'Unknown Model'}</span>
+                `;
+                const footer = `
+                    <button class="btn btn-approve" onclick="noteToAI('${data.summary.replace(/'/g, "\\'")}', '${url}', document.getElementById('yt-user-comment').value.replace(/'/g, "\\'"))">
+                        <i class="fas fa-brain"></i> AI에게 학습시키기
+                    </button>
+                    <button class="btn btn-reject close-modal-action">닫기</button>
+                `;
+                openModal(title, data.summary + (data.insight ? "\n\n---\n\n### 이면 추론\n" + data.insight : ""), info, footer);
+            };
+            
+            resultArea.scrollIntoView({ behavior: 'smooth', block: 'start' });
         } catch (err) {
             showNotification('요약 요청 실패');
         } finally {
@@ -541,8 +557,32 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.key === 'Enter') document.getElementById('summarize-btn').click();
     });
 
+    // 요약 / 이면 추론 탭 전환
+    document.addEventListener('click', (e) => {
+        const tabBtn = e.target.closest('.yt-tab-btn');
+        if (!tabBtn) return;
+        const target = tabBtn.dataset.target;
+        document.querySelectorAll('.yt-tab-btn').forEach(b => {
+            const isActive = b.dataset.target === target;
+            b.style.color = isActive ? 'white' : '#888';
+            b.style.borderBottom = isActive ? '2px solid var(--accent-primary)' : '2px solid transparent';
+            b.classList.toggle('active', isActive);
+        });
+        ['yt-summary-panel', 'yt-insight-panel'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = (id === target) ? 'block' : 'none';
+        });
+    });
+
     document.getElementById('yt-note-btn').addEventListener('click', async () => {
-        if (!currentSummary) { showNotification('먼저 요약을 생성하세요.'); return; }
+        // currentSummary가 비었으면 DOM에서 직접 읽기 (새로고침 후에도 동작)
+        const summaryEl = document.getElementById('yt-summary-content');
+        const summaryText = currentSummary || summaryEl?.innerText?.trim();
+        
+        if (!summaryText) { showNotification('먼저 영상 요약을 실행해 주세요.'); return; }
+        
+        const urlEl = document.getElementById('yt-video-link');
+        const saveUrl = currentUrl || urlEl?.href || '';
         const userComment = document.getElementById('yt-user-comment').value.trim();
 
         const btn = document.getElementById('yt-note-btn');
@@ -554,17 +594,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    content: currentSummary,
-                    source_url: currentUrl,
+                    content: summaryText,
+                    source_url: saveUrl,
                     user_comment: userComment,
                     category: 'youtube'
                 })
             });
             const data = await res.json();
-            showNotification(data.message || 'AI가 학습했습니다!');
+            showNotification('✅ AI가 학습했습니다!');
             loadKnowledgeNotes();
         } catch (err) {
-            showNotification('노트 저장 실패');
+            showNotification('❌ 노트 저장 실패');
         } finally {
             btn.disabled = false;
             btn.innerHTML = '<i class="fas fa-brain"></i> AI에게 노트 (학습시키기)';
@@ -573,32 +613,136 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function loadKnowledgeNotes() {
         const list = document.getElementById('yt-notes-list');
-        list.innerHTML = '<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i><span>Loading notes...</span></div>';
+        const badge = document.getElementById('notes-count-badge');
+        list.innerHTML = '<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i><span>Loading knowledge base...</span></div>';
+        
         try {
             const res = await fetch('/api/knowledge/notes');
             const data = await res.json();
             list.innerHTML = '';
-            if (!data.notes || data.notes.length === 0) {
-                list.innerHTML = '<div class="loading-spinner">저장된 노트가 없습니다. 영상을 요약하고 AI에게 노트해 보세요!</div>';
+            
+            const notes = data.notes || [];
+            if (badge) badge.textContent = `${notes.length} Notes`;
+            
+            if (notes.length === 0) {
+                list.innerHTML = '<div class="loading-spinner" style="grid-column: 1/-1;">저장된 노트가 없습니다. 영상을 요약하고 AI에게 학습시켜 보세요!</div>';
                 return;
             }
-            data.notes.forEach(note => {
+
+            notes.forEach(note => {
                 const card = document.createElement('div');
-                card.style = 'background: rgba(255,68,68,0.05); border: 1px solid rgba(255,68,68,0.2); border-radius: 12px; padding: 18px; margin-bottom: 15px; border-left: 4px solid #ff4444;';
-                const comment = note.user_comment ? `<div style="font-weight:600; color: #c084fc; margin-bottom:8px;">📌 ${note.user_comment}</div>` : '';
-                const srcLink = note.source_url ? `<a href="${note.source_url}" target="_blank" style="font-size:0.75rem; color:#888; text-decoration:none;">🔗 ${note.source_url.substring(0, 60)}...</a>` : '';
+                card.className = 'note-card';
+                
+                const commentHtml = note.user_comment ? `<div class="note-comment">📌 ${note.user_comment}</div>` : '';
+                const linkHtml = note.source_url ? `<a href="${note.source_url}" target="_blank" class="note-link">🔗 Link</a>` : '';
+                
                 card.innerHTML = `
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                        <span style="font-size:0.75rem; color:#888;">🎥 ${new Date(note.timestamp).toLocaleString()}</span>
-                        ${srcLink}
+                    <button class="delete-note-btn" title="삭제" onclick="event.stopPropagation(); deleteKnowledgeNote('${note.id}')">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+                    <div class="note-header">
+                        <span class="note-time"><i class="far fa-calendar-alt"></i> ${new Date(note.timestamp).toLocaleDateString()}</span>
+                        ${linkHtml}
                     </div>
-                    ${comment}
-                    <div style="font-size:0.9rem; line-height:1.6; color:#ccc; max-height:200px; overflow-y:auto;">${formatReport(note.content)}</div>
+                    ${commentHtml}
+                    <div class="note-body">${formatReport(note.content)}</div>
                 `;
+
+                // 카드 클릭 시 상세 모달 오픈
+                card.onclick = () => {
+                    const infoHtml = `
+                        <span><i class="far fa-calendar-alt"></i> ${new Date(note.timestamp).toLocaleString()}</span>
+                        ${note.source_url ? `<span><i class="fas fa-link"></i> <a href="${note.source_url}" target="_blank" style="color:inherit; text-decoration:none;">${note.source_url}</a></span>` : ''}
+                    `;
+                    const footerHtml = `
+                        <button class="btn btn-approve" onclick="noteToAI('${note.content.replace(/'/g, "\\'")}', '${note.source_url || ''}', '${note.user_comment?.replace(/'/g, "\\'") || ''}')">
+                            <i class="fas fa-brain"></i> AI에게 다시 학습시키기
+                        </button>
+                        <button class="btn btn-reject close-modal-action">닫기</button>
+                    `;
+                    openModal(note.user_comment || '지식 노트 상세', note.content, infoHtml, footerHtml);
+                };
+
                 list.appendChild(card);
             });
         } catch (err) {
-            list.innerHTML = '<div class="loading-spinner">노트 로드 실패</div>';
+            list.innerHTML = '<div class="loading-spinner" style="grid-column: 1/-1;">데이터 로드 실패</div>';
         }
     }
+
+    // Modal Utility Functions
+    function openModal(title, content, infoHtml = '', footerHtml = '') {
+        modalTitle.innerText = title;
+        modalInfoBar.innerHTML = infoHtml;
+        modalTextContent.innerHTML = formatReport(content);
+        modalFooter.innerHTML = footerHtml;
+        
+        modal.classList.add('show');
+        document.body.style.overflow = 'hidden';
+
+        // 닫기 버튼 이벤트 바인딩 (동적 생성된 버튼 포함)
+        const closeBtns = modal.querySelectorAll('.close-modal, .close-modal-action');
+        closeBtns.forEach(btn => {
+            btn.onclick = closeModal;
+        });
+    }
+
+    function closeModal() {
+        modal.classList.remove('show');
+        document.body.style.overflow = 'auto';
+    }
+
+    window.onclick = (event) => {
+        if (event.target == modal) closeModal();
+    };
+
+    // Note to AI (Shared logic)
+    window.noteToAI = async (content, sourceUrl, userComment) => {
+        const loadingBtn = modal.querySelector('.btn-approve');
+        const originalHtml = loadingBtn ? loadingBtn.innerHTML : '';
+        if (loadingBtn) {
+            loadingBtn.disabled = true;
+            loadingBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> 학습 중...';
+        }
+
+        try {
+            const res = await fetch('/api/knowledge/note', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    content: content,
+                    source_url: sourceUrl,
+                    user_comment: userComment,
+                    category: 'youtube'
+                })
+            });
+            showNotification('✅ AI가 학습했습니다!');
+            if (modal.classList.contains('show')) closeModal();
+            loadKnowledgeNotes();
+        } catch (err) {
+            showNotification('❌ 노트 저장 실패');
+        } finally {
+            if (loadingBtn) {
+                loadingBtn.disabled = false;
+                loadingBtn.innerHTML = originalHtml;
+            }
+        }
+    };
+
+    window.deleteKnowledgeNote = async (id) => {
+        if (!confirm('이 지식 노트를 삭제하시겠습니까? 에이전트의 기억에서 제거됩니다.')) return;
+        
+        try {
+            const res = await fetch('/api/knowledge/notes/delete-bulk', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids: [id] })
+            });
+            const data = await res.json();
+            showNotification(data.message || '삭제되었습니다.');
+            loadKnowledgeNotes();
+        } catch (err) {
+            showNotification('삭제 오류 발생');
+        }
+    };
 });

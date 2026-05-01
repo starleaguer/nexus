@@ -24,7 +24,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 # 설정 공유 모듈 로드
 from core.config_loader import NexusConfig
-from core.manager_core import OllamaClient
+from core.orchestrator import OllamaClient
 
 logger = logging.getLogger(__name__)
 

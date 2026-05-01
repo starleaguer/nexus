@@ -52,6 +52,10 @@ class YahooFinanceProvider:
             yfinance Ticker object
         """
         ticker_kodu = ticker_kodu.upper().strip()
+        if not ticker_kodu:
+            logger.error("Empty ticker_kodu received.")
+            raise ValueError("Empty ticker name")
+            
         suffix = MARKET_SUFFIXES.get(market.upper(), "")
 
         # Only append suffix if not already present

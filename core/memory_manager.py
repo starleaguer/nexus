@@ -76,7 +76,6 @@ class MemoryManager:
             # 사용자 성향 컬렉션
             self.user_profile_collection = self.chroma_client.get_or_create_collection(name="user_profiles")
             self.learnings_collection = self.chroma_client.get_or_create_collection(name="agent_learnings")
-            self.autonomous_logs_collection = self.chroma_client.get_or_create_collection(name="autonomous_logs")
             self.knowledge_notes_collection = self.chroma_client.get_or_create_collection(name="knowledge_notes")
         else:
             self.chroma_client = None
@@ -534,60 +533,16 @@ class MemoryManager:
             print(f"Error getting knowledge notes: {e}")
             return []
 
-    # ==================== Autonomous Logs ====================
-    def save_autonomous_log(self, content: str):
-        """자율 루프 리포트 저장"""
-        if not CHROMADB_AVAILABLE or not hasattr(self, 'autonomous_logs_collection'): return
-        
-        log_id = f"auto_{datetime.now().timestamp()}"
-        logger.info(f"[MemoryManager] 자율 로그 저장 시작: {log_id} (길이: {len(content)})")
-        self.autonomous_logs_collection.add(
-            ids=[log_id],
-            documents=[content],
-            metadatas=[{"timestamp": datetime.now().isoformat()}]
-        )
-        logger.info(f"[MemoryManager] 자율 로그 저장 완료: {log_id}")
-
-    def get_autonomous_logs(self, limit: int = 20) -> List[Dict[str, Any]]:
-        """모든 자율 리포트 조회 (최신순)"""
-        if not CHROMADB_AVAILABLE or not hasattr(self, 'autonomous_logs_collection'): return []
-        
+    def delete_knowledge_note(self, note_id: str) -> bool:
+        """지식 노트 삭제"""
+        if not CHROMADB_AVAILABLE or not hasattr(self, 'knowledge_notes_collection'): return False
         try:
-            # 명시적으로 documents와 metadatas를 포함하도록 요청
-            result = self.autonomous_logs_collection.get(include=["documents", "metadatas"])
-            logs = []
-            
-            if not result or not result.get("ids"):
-                logger.info("[MemoryManager] 자율 로그가 비어있음.")
-                return []
-                
-            logger.info(f"[MemoryManager] 자율 로그 {len(result['ids'])}건 조회됨.")
-            
-            for i in range(len(result["ids"])):
-                # 메타데이터 방어적 처리
-                meta = result["metadatas"][i] if result["metadatas"] and i < len(result["metadatas"]) else {}
-                logs.append({
-                    "id": result["ids"][i],
-                    "content": result["documents"][i],
-                    "timestamp": meta.get("timestamp", datetime.now().isoformat())
-                })
-            
-            # 시간순 정렬 및 리미트 적용
-            sorted_logs = sorted(logs, key=lambda x: x["timestamp"], reverse=True)[:limit]
-            return sorted_logs
-        except Exception as e:
-            logger.error(f"[MemoryManager] 자율 로그 조회 중 오류: {e}")
-            return []
-
-    def delete_autonomous_logs(self, log_ids: List[str]) -> bool:
-        """자율 로그 삭제 (벌크)"""
-        if not CHROMADB_AVAILABLE or not hasattr(self, 'autonomous_logs_collection'): return False
-        try:
-            self.autonomous_logs_collection.delete(ids=log_ids)
+            self.knowledge_notes_collection.delete(ids=[note_id])
             return True
         except Exception as e:
-            logger.error(f"Error deleting autonomous logs: {e}")
+            logger.error(f"Error deleting knowledge note: {e}")
             return False
+
 
 
 if __name__ == "__main__":

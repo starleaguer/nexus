@@ -11,6 +11,23 @@ CORE_DIR = Path(__file__).parent
 PROJECT_ROOT = CORE_DIR.parent
 MANIFEST_PATH = PROJECT_ROOT / "manifest.json"
 
+def _load_env():
+    """ .env 파일에서 환경 변수를 수동으로 로드합니다. """
+    env_path = PROJECT_ROOT / ".env"
+    if env_path.exists():
+        try:
+            with open(env_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        key, val = line.split("=", 1)
+                        os.environ[key.strip()] = val.strip()
+        except Exception:
+            pass
+
+# 초기화 시 환경 변수 로드
+_load_env()
+
 class NexusConfig:
     """Nexus 시스템 전체 설정 관리자"""
     
@@ -49,7 +66,7 @@ class NexusConfig:
             return model
             
         # 3. 기본값 반환
-        return default or ("gemma2:27b" if component in ["manager", "core"] else "gemma2:9b")
+        return default or ("qwen3:latest" if component in ["manager", "core"] else "qwen3:latest")
 
     @classmethod
     def get_worker_url(cls) -> str:
@@ -105,10 +122,21 @@ class NexusConfig:
         if not skills_dir.exists():
             return discovered
 
-        for file_path in skills_dir.glob("*.py"):
-            if file_path.name.startswith("__"):
-                continue
-                
+        manifest_mcp_names = {m.get("name") for m in cls.load_manifest().get("tools", {}).get("mcp", [])}
+
+        # 검색할 대상 파일 목록 생성 (단일 파일 + 패키지 __init__.py)
+        target_files = []
+        for p in skills_dir.iterdir():
+            if p.is_file() and p.name.endswith(".py") and not p.name.startswith("__"):
+                if p.stem not in manifest_mcp_names:
+                    target_files.append((p, p.stem))
+            elif p.is_dir() and not p.name.startswith("__") and not p.name.startswith("."):
+                if p.name not in manifest_mcp_names:
+                    init_file = p / "__init__.py"
+                    if init_file.exists():
+                        target_files.append((init_file, p.name))
+                    
+        for file_path, skill_name in target_files:
             try:
                 with open(file_path, "r", encoding="utf-8") as f:
                     tree = ast.parse(f.read(), filename=file_path.name)
@@ -118,16 +146,38 @@ class NexusConfig:
                 if not has_run:
                     continue
                     
-                # 최상단 Docstring 추출
+                # 최상단 Docstring 추출 및 파싱
                 docstring = ast.get_docstring(tree)
-                description = docstring.strip().split('\n')[0] if docstring else "자동 탐색된 스킬 (설명 없음)"
+                raw_doc = docstring.strip() if docstring else "자동 탐색된 스킬 (설명 없음)"
                 
+                # 구조적 파싱 ([사용 시점], [출력] 등)
+                description = raw_doc
+                usage = ""
+                output = ""
+                
+                if "[사용 시점]" in raw_doc:
+                    parts = raw_doc.split("[사용 시점]")
+                    description = parts[0].strip()
+                    after_usage = parts[1]
+                    if "[출력]" in after_usage:
+                        usage_parts = after_usage.split("[출력]")
+                        usage = usage_parts[0].strip()
+                        output = usage_parts[1].strip()
+                    else:
+                        usage = after_usage.strip()
+                elif "[출력]" in raw_doc:
+                    parts = raw_doc.split("[출력]")
+                    description = parts[0].strip()
+                    output = parts[1].strip()
+
                 discovered.append({
-                    "name": file_path.stem,
-                    "description": description
+                    "name": skill_name,
+                    "description": description,
+                    "usage": usage,
+                    "output": output
                 })
             except Exception as e:
-                logger.warning(f"스킬 스캔 실패 ({file_path.name}): {e}")
+                logger.warning(f"스킬 스캔 실패 ({skill_name}): {e}")
                 
         return discovered
 

@@ -1,17 +1,7 @@
 """
-Market Flow 분석 스킬 - yfinance를 활용한 S&P 500 섹터 수급 분석
-최종 수정본: Nexus 시스템 아키텍처 표준 준수 (Error Analysis & System Review 강화)
-
-[주요 수정 사항]
-1. 에러 원인 분석(Root Cause Analysis) 기능 강화:
-   - 단순 에러 카운팅을 넘어, 어떤 티커가 어떤 종류의 에러(Timeout, Network, Parsing)로 실패했는지 상세 내역(failure_details)을 반환하도록 구조 개선.
-   - 각 요청의 Latency(지연 시간)를 측정하여 시스템 성능 저하 원인 분석 지원.
-2. 에러 계층 구조(Exception Hierarchy) 정교화:
-   - NetworkError, APIError, ParsingError 등 구체적인 예외 클래스를 도입하여 상위 오케동레이터가 에러의 성격(Retry 가능 여부 등)을 판단할 수 있도록 설계.
-3. 시스템 안정성 및 격리(Isolation) 강화:
-   - 개별 섹터 수집 실패 시에도 전체 프로세스가 중단되지 않도록 예외 처리 범위를 세분화하고, 실패 컨텍스트를 수집.
-4. 코드 결함 수정:
-   - 기존 코드의 오타(self._gatecap_check) 및 잘못된 변수 할당 로직 수정.
+S&P 500 섹터 수급 분석 및 성능/에러 내역 반환 스킬.
+[사용 시점] 미국 시장의 전반적인 섹터별 흐름이나 수급 상태를 파악해야 할 때 사용.
+[출력] 섹터별 거래대금 순위 및 수집 과정의 진단 데이터(성공/실패 내역).
 """
 
 from typing import Dict, Any, List, Optional, Union
@@ -242,7 +232,17 @@ class MarketFlowSkill:
 
 
 def run(input_data: Dict[str, Any]) -> Dict[str, Any]:
-    """Nexus Orchestrator 호출용 엔트리포인트"""
+    """S&P 500 섹터 수급 및 시장 흐름 분석 도구.
+    [사용 시점] 
+    - 미국 시장 전체의 섹터별 자금 유입/유출 및 흐름을 파악하고 싶을 때
+    - 개별 종목이 아닌, 기술주/에너지주 등 '섹터 단위'의 성과가 궁금할 때
+    
+    [파라미터]
+    - query: 분석 요청 문구 (필수, 예: "현재 미국 시장 섹터별 흐름 분석해줘")
+    
+    [출력] 
+    섹터별 거래대금 순위 및 성과 분석 데이터 반환
+    """
     try:
         skill = MarketFlowSkill()
         return skill.analyze(input_data)

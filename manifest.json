@@ -3,8 +3,13 @@
   "name": "nexus",
   "description": "분산 AI 기반 지능형 투자 분석 및 작업 자동화 시스템",
   "models": {
-    "worker": "gemma4:e4b",
-    "manager": "gemma4:e4b"
+    "worker": "qwen3:latest",
+    "manager": "mlx-community/Qwen3.6-27B-4bit",
+    "cloud": "models/gemini-flash-lite-latest"
+  },
+  "local": {
+    "url": "http://localhost:8888",
+    "model": "mlx-community/Qwen3.6-35B-A3B-4bit"
   },
   "tools": {
     "mcp": [
@@ -92,10 +97,7 @@
   },
   "timeouts": {
     "worker": 120,
-    "ollama": 120
-  },
-  "autonomous": {
-    "interval": 36000
+    "ollama": 300
   },
   "worker": {
     "port": 11434,

@@ -1,7 +1,7 @@
 """
-Nexus Architect (Auto-Coder) Skill
-시스템 소스 코드를 읽고, LLM을 사용하여 수정 사항(예: 보안 검수 로직 추가)을 반영한 뒤,
-자체 검증(Self-Review)을 거쳐 안전하게 파일 시스템에 덮어쓰는 스킬입니다.
+Nexus Architect (Auto-Coder) - 시스템 소스 코드 수정 및 보안 검수 스킬.
+[사용 시점] 기존 스킬의 로직을 수정하거나, 보안 검수 기능을 추가하고 자동화된 코드 업데이트가 필요할 때 사용.
+[출력] 코드 생성 결과, 자체 검증(Self-Review) 내용 및 파일 업데이트 성공 여부.
 """
 import os
 import json
@@ -15,14 +15,15 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from core.manager_core import OllamaClient
+from core.orchestrator import OllamaClient
+from shared.utils import extract_json_from_text
 import logging
 
 logger = logging.getLogger(__name__)
 
 class Skill:
     def __init__(self):
-        self.llm = OllamaClient() # 매니페스트/환경변수에 설정된 모델 사용 (ManagerCore 재사용)
+        self.llm = OllamaClient() # 매니페스트/환경변수에 설정된 모델 사용 (Orchestrator 재사용)
         self.target_dir = PROJECT_ROOT / "skills"
 
     def _find_target_files(self, query: str) -> List[Path]:
@@ -56,7 +57,8 @@ class Skill:
 수정된 전체 파이썬 코드를 작성해줘."""
         
         result = self.llm.chat(system_prompt, user_prompt, timeout=120)
-        return self._extract_code(result)
+        # extract_json_from_text가 마크다운 블록 내의 코드도 잘 추출함
+        return extract_json_from_text(result) or result.strip()
 
     def _verify_code(self, original_code: str, modified_code: str, query: str) -> tuple[bool, str]:
         """수정된 코드가 요구사항을 충족하는지 자체 검증(Self-Review)합니다."""
@@ -79,24 +81,12 @@ class Skill:
 위 코드를 검토해줘."""
         
         result = self.llm.chat(system_prompt, user_prompt, timeout=60)
-        try:
-            if "{" in result and "}" in result:
-                json_str = result[result.find("{"):result.rfind("}")+1]
-                parsed = json.loads(json_str)
-                return parsed.get("is_valid", False), parsed.get("reason", "검증 실패")
-        except:
-            pass
+        parsed = extract_json_from_text(result)
+        if parsed:
+            return parsed.get("is_valid", False), parsed.get("reason", "검증 실패")
+        
         return False, "JSON 파싱 실패로 검증을 통과하지 못했습니다."
 
-    def _extract_code(self, llm_response: str) -> str:
-        """LLM 응답에서 파이썬 코드 블록을 추출합니다."""
-        if "```python" in llm_response:
-            code = llm_response.split("```python")[1].split("```")[0].strip()
-            return code
-        elif "```" in llm_response:
-            code = llm_response.split("```")[1].split("```")[0].strip()
-            return code
-        return llm_response.strip()
 
     def run(self, params: Dict[str, Any]) -> Dict[str, Any]:
         query = params.get("query", "")

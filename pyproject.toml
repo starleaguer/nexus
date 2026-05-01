@@ -40,6 +40,9 @@ dependencies = [
     "gspread",
     "markdownify",
     "fastmcp",
+    "pystocklib>=0.0.5",
+    "browser-cookie3>=0.20.1",
+    "mlx-lm",
 ]
 
 [tool.uv.workspace]

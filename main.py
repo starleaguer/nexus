@@ -22,16 +22,17 @@ logger = logging.getLogger(__name__)
 
 # 외부 라이브러리 로그 억제
 logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("google_genai").setLevel(logging.WARNING)
 
-from core.manager_core import ManagerCore
-from core.autonomous_agent import AutonomousAgent
+from core.orchestrator import Orchestrator
 from core.config_loader import NexusConfig
+from core.researcher import ToolHunter
 import core.youtube_utils as yt_utils
 import ollama
 
 # 전역 인스턴스
-core = ManagerCore()
-autonomous_agent = AutonomousAgent(core)
+core = Orchestrator()
+tool_hunter = ToolHunter()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -45,13 +46,8 @@ async def lifespan(app: FastAPI):
     else:
         logger.warning(f"❌ Remote Worker is OFFLINE at {core.llm.remote_url}. Using local fallback for all tasks.")
 
-    # 자율 모드 시작
-    autonomous_agent.start()
-    
     yield
     
-    # 종료 시 자율 모드 중지
-    autonomous_agent.stop()
     logger.info("🛑 Nexus Hub Server shutting down...")
 
 app = FastAPI(title="Nexus Hub Dashboard", lifespan=lifespan)
@@ -150,10 +146,6 @@ async def update_model_config(req: ModelConfigRequest):
             json.dump(manifest, f, indent=2, ensure_ascii=False)
         NexusConfig._manifest = None
         
-        # 모델 변경 시 에이전트 재시작 (새 모델 적용)
-        autonomous_agent.stop()
-        autonomous_agent.start()
-        
         return {"status": "success", "message": f"{req.component} 모델이 {req.model}로 업데이트되었습니다."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -179,9 +171,6 @@ async def update_interval_config(req: IntervalConfigRequest):
         with open(NexusConfig.MANIFEST_PATH, "w", encoding="utf-8") as f:
             json.dump(manifest, f, indent=2, ensure_ascii=False)
         
-        # 주기 변경 시 에이전트 재시작
-        autonomous_agent.stop()
-        autonomous_agent.start()
         return {"status": "success", "message": "모니터링 주기가 업데이트되었습니다."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -221,76 +210,40 @@ async def save_knowledge_note(req: KnowledgeNoteRequest):
     )
     return {"status": "success"}
 
-@app.get("/api/autonomous/logs")
-async def get_autonomous_logs():
-    """자율 에이전트의 활동 로그 반환"""
-    return {"status": "success", "logs": autonomous_agent.get_logs()}
-
-@app.post("/api/autonomous/logs/delete-bulk")
-async def delete_autonomous_logs_bulk(req: BulkDeleteRequest):
-    if core.memory.delete_autonomous_logs(req.ids):
-        return {"status": "success"}
-    return {"status": "error"}
+@app.post("/api/knowledge/notes/delete-bulk")
+async def delete_knowledge_notes_bulk(req: BulkDeleteRequest):
+    for nid in req.ids:
+        core.memory.delete_knowledge_note(nid)
+    return {"status": "success", "message": f"{len(req.ids)}건의 노트를 삭제했습니다."}
 
 @app.post("/api/approve")
 async def approve_task(req: ApproveRequest):
-    # 실제 시스템에선 해당 작업을 승인 처리하는 로직이 필요함
-    return {"status": "success", "message": f"작업 {req.task_id} 승인됨"}
+    # ToolHunter를 통한 도구 승인 및 설치
+    msg = tool_hunter.approve_candidate(req.task_id)
+    return {"status": "success", "message": msg}
 
 @app.post("/api/reject")
 async def reject_task(req: ApproveRequest):
+    # ToolHunter를 통한 도구 거절
+    tool_hunter.reject_candidate(req.task_id)
     return {"status": "success", "message": f"작업 {req.task_id} 거절됨"}
-
-@app.get("/api/autonomous/reports")
-async def get_autonomous_reports(limit: int = 20):
-    """저장된 자율 분석 리포트 반환"""
-    reports = core.memory.get_autonomous_logs(limit=limit)
-    return {"status": "success", "reports": reports}
 
 @app.get("/api/candidates")
 async def get_candidates():
-    """분석 후보 목록 (현재는 빈 목록 반환하여 에러 방지)"""
-    return {"status": "success", "candidates": []}
+    """Tool Hunter에서 찾은 분석 후보(도구) 목록 반환"""
+    candidates = tool_hunter._load_candidates()
+    return {"status": "success", "candidates": candidates}
 
 @app.post("/api/youtube/summarize")
 async def youtube_summarize(req: YouTubeSummarizeRequest):
-    """유튜브 요약 (분산 LLM 활용)"""
+    """유튜브 요약 (분산 LLM + 자동 모델 선택 + 이면 추론)"""
     try:
-        video_id = yt_utils.extract_video_id(req.url)
-        if not video_id: return {"status": "error", "message": "유효하지 않은 URL"}
-        
-        metadata = yt_utils.get_yt_metadata(req.url)
-        result = yt_utils.get_yt_transcript(video_id)
-        
-        if "error" in result: 
-            result = await yt_utils.transcribe_audio_whisper(req.url)
-            
-        if "error" in result: 
-            return {"status": "error", "message": f"자막 추출 실패: {result.get('error')}"}
-        
-        transcript = result["text"]
-        chunks = [transcript[i:i+4000] for i in range(0, len(transcript), 4000)]
-        
-        # 1. 고속 작업: Worker LLM을 사용하여 파편화된 요약/추출 수행
-        extracted_facts = []
-        for chunk in chunks:
-            # use_remote=True (Worker)
-            fact = await core.llm.chat("너는 정보 추출가야. 핵심 내용만 요약해줘.", chunk, use_remote=(req.model_type=="worker"))
-            extracted_facts.append(fact)
-        
-        combined_facts = "\n\n".join(extracted_facts)
-        
-        # 2. 깊은 추론: Manager LLM을 사용하여 최종 리포트 구성
-        writer_system = "너는 유튜브 스크립트 요약 전문가야. 마크다운 구조로 한국어 요약해줘."
-        writer_prompt = f"다음 내용을 바탕으로 요약해줘:\n{combined_facts}"
-        
-        final_summary = await core.llm.chat(writer_system, writer_prompt, use_remote=False)
-        
-        return {
-            "status": "success",
-            "metadata": metadata,
-            "summary": final_summary
-        }
+        result = await yt_utils.summarize_video(req.url, orchestrator=core, model_type=req.model_type)
+        if result.get("status") == "error":
+            raise HTTPException(status_code=400, detail=result.get("message"))
+        return result
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"YouTube summarize error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -313,9 +266,6 @@ async def get_status():
         "core_model": NexusConfig.get_model("core"),
         "worker_model": NexusConfig.get_model("worker"),
         "worker_url": actual_worker_url,
-        "autonomous": {
-            "interval": manifest.get("autonomous", {}).get("interval", 3600)
-        },
         "mode": "consolidated"
     }
 
@@ -338,7 +288,20 @@ async def get_system_config():
 @app.get("/api/tools")
 async def get_active_tools():
     manifest = NexusConfig.load_manifest()
-    return manifest.get("tools", {})
+    tools = manifest.get("tools", {})
+    
+    # 동적 탐색된 스킬 병합 (Zero-Config 지원)
+    discovered_skills = NexusConfig.get_discovered_skills()
+    if "skills" not in tools:
+        tools["skills"] = []
+        
+    # 중복 방지를 위한 집합 생성
+    existing_skill_names = {s.get("name") for s in tools["skills"]}
+    for skill in discovered_skills:
+        if skill["name"] not in existing_skill_names:
+            tools["skills"].append(skill)
+            
+    return tools
 
 @app.post("/api/chat")
 async def chat(req: ChatRequest):
